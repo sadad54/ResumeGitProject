@@ -20,11 +20,18 @@ dependencies = [
     "httpx>=0.27",
     "bcrypt>=4.2",
     "pydantic[email]>=2.9",
+    "sse-starlette>=2.1",
     "proofhire-contracts",
+    "proofhire-worker",
 ]
 
 [tool.uv.sources]
 proofhire-contracts = { path = "../../packages/contracts", editable = true }
+# The API enqueues tasks (e.g. sync_repositories) defined in the worker package.
+# This mutual api<->worker path dependency is a deliberate modular-monolith
+# tradeoff (ADR-0001) — both deploy from one repo, so it's simpler than
+# duplicating task signatures or introducing a third shared package for them.
+proofhire-worker = { path = "../worker", editable = true }
 
 [project.optional-dependencies]
 dev = [
@@ -45,3 +52,10 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["proofhire_api"]
