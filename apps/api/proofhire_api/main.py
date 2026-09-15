@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from proofhire_api.config import get_settings
 from proofhire_api.logging import configure_logging
 from proofhire_api.middleware.tracing import TraceIdMiddleware
-from proofhire_api.routers import auth, events, evidence, github, health, jobs
+from proofhire_api.routers import auth, events, evidence, generation, github, health, jobs, profile
 
 
 def create_app() -> FastAPI:
@@ -26,9 +26,10 @@ def create_app() -> FastAPI:
     app.include_router(events.router)
     app.include_router(evidence.router)
     app.include_router(jobs.router)
-    # Remaining feature routers (profile, generation, applications) are added
-    # under /api/v1 as each phase implements them — see docs/product/PRD.md §23
-    # for the full contract and the build plan for sequencing.
+    app.include_router(profile.router)
+    app.include_router(generation.router)
+    # Remaining feature router (applications) is added under /api/v1 in
+    # Phase 6 — see docs/product/PRD.md §23 for the full contract.
 
     _ = settings  # settings wired to routers as they're added
     return app

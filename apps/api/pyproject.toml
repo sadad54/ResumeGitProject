@@ -21,6 +21,9 @@ dependencies = [
     "bcrypt>=4.2",
     "pydantic[email]>=2.9",
     "sse-starlette>=2.1",
+    "pypdf>=5.0",
+    "python-docx>=1.1",
+    "python-multipart>=0.0.12",
     "proofhire-contracts",
     "proofhire-worker",
 ]
