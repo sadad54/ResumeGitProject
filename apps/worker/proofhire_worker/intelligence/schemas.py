@@ -28,3 +28,20 @@ class EvidenceItemOutput(BaseModel):
 
 class EvidenceExtractionOutput(BaseModel):
     evidence: list[EvidenceItemOutput] = Field(default_factory=list)
+
+
+class RequirementOutput(BaseModel):
+    text: str = Field(description="Original wording from the JD, unparaphrased")
+    category: str = Field(
+        description="One of: skill, experience, responsibility, domain, education, tooling, soft_skill, seniority"
+    )
+    required: bool = Field(description="True if must-have, False if preferred/nice-to-have")
+    importance: float = Field(ge=0.0, le=1.0)
+    normalized: list[str] = Field(default_factory=list, description="Lowercase canonical keywords")
+
+
+class JDAnalysisOutput(BaseModel):
+    role: str = ""
+    company: str = ""
+    seniority: str = ""
+    requirements: list[RequirementOutput] = Field(default_factory=list)
