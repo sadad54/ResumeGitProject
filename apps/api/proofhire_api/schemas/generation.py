@@ -45,8 +45,16 @@ class GeneratedDocumentPublic(BaseModel):
     template_id: str
     version: int
     content_json: dict
+    html_ref: str | None = None
+    pdf_ref: str | None = None
+    plaintext_ref: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ExportResponse(BaseModel):
+    document_id: uuid.UUID
+    pdf_available: bool
 
 
 class GeneratedClaimPublic(BaseModel):

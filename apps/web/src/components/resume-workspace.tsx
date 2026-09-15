@@ -11,7 +11,14 @@ type ResumeContent = {
   experience: { employer: string; title: string; start_date: string; end_date: string; bullets: string[] }[];
 };
 
-type GeneratedDocument = { id: string; content_json: ResumeContent };
+type CoverLetterContent = { body_paragraphs: string[] };
+
+type GeneratedDocument = {
+  id: string;
+  type: "resume" | "cover_letter";
+  content_json: ResumeContent | CoverLetterContent;
+  pdf_ref: string | null;
+};
 
 type GeneratedClaim = {
   id: string;
@@ -39,10 +46,12 @@ const STATUS_COLOR: Record<string, string> = {
 export function ResumeWorkspace() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string>("");
+  const [documentType, setDocumentType] = useState<"resume" | "cover_letter">("resume");
   const [document, setDocument] = useState<GeneratedDocument | null>(null);
   const [claims, setClaims] = useState<GeneratedClaim[]>([]);
   const [selectedBullet, setSelectedBullet] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "done">("idle");
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,7 +74,7 @@ export function ResumeWorkspace() {
     try {
       await apiFetch(`/api/v1/jobs/${selectedJobId}/generate`, {
         method: "POST",
-        body: JSON.stringify({ mode: "conservative", document_type: "resume" }),
+        body: JSON.stringify({ mode: "conservative", document_type: documentType }),
       });
       await waitForCompletion(selectedJobId);
     } catch (err) {
@@ -108,6 +117,40 @@ export function ResumeWorkspace() {
     setStatus("done");
   }
 
+  async function exportPdf() {
+    if (!document) return;
+    setExporting(true);
+    setError(null);
+    try {
+      await apiFetch(`/api/v1/documents/${document.id}/export`, { method: "POST" });
+      const refreshed = await apiFetch<GeneratedDocument>(`/api/v1/documents/${document.id}`);
+      setDocument(refreshed);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Export failed — see worker logs.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function downloadPdf() {
+    if (!document) return;
+    const token = getAccessToken();
+    const response = await fetch(`${apiBaseUrl()}/api/v1/documents/${document.id}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      setError("Failed to download PDF.");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = window.document.createElement("a");
+    a.href = url;
+    a.download = `resume-${document.id}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const activeClaim = claims.find((c) => c.claim_text === selectedBullet);
 
   return (
@@ -126,28 +169,56 @@ export function ResumeWorkspace() {
               </option>
             ))}
           </select>
+          <select
+            value={documentType}
+            onChange={(e) => setDocumentType(e.target.value as "resume" | "cover_letter")}
+            className="rounded border border-neutral-300 px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+          >
+            <option value="resume">Resume</option>
+            <option value="cover_letter">Cover letter</option>
+          </select>
           <button
             onClick={generate}
             disabled={!selectedJobId || status === "generating"}
             className="rounded bg-neutral-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
           >
-            {status === "generating" ? "Generating..." : "Generate resume"}
+            {status === "generating" ? "Generating..." : `Generate ${documentType === "resume" ? "resume" : "cover letter"}`}
           </button>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         {document && (
+          <div className="flex gap-2">
+            <button
+              onClick={exportPdf}
+              disabled={exporting}
+              className="rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
+            >
+              {exporting ? "Exporting..." : "Export PDF"}
+            </button>
+            {document.pdf_ref && (
+              <button
+                onClick={downloadPdf}
+                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white"
+              >
+                Download PDF
+              </button>
+            )}
+          </div>
+        )}
+
+        {document && document.type === "resume" && (
           <div className="space-y-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-            <p className="text-sm">{document.content_json.summary}</p>
+            <p className="text-sm">{(document.content_json as ResumeContent).summary}</p>
             <div className="flex flex-wrap gap-1">
-              {document.content_json.skills.map((s) => (
+              {(document.content_json as ResumeContent).skills.map((s) => (
                 <span key={s} className="rounded bg-neutral-100 px-2 py-0.5 text-xs dark:bg-neutral-800">
                   {s}
                 </span>
               ))}
             </div>
-            {document.content_json.experience.map((entry, i) => (
+            {(document.content_json as ResumeContent).experience.map((entry, i) => (
               <div key={i}>
                 <div className="text-sm font-medium">
                   {entry.title} — {entry.employer} ({entry.start_date}–{entry.end_date})
@@ -170,6 +241,25 @@ export function ResumeWorkspace() {
                 </ul>
               </div>
             ))}
+          </div>
+        )}
+
+        {document && document.type === "cover_letter" && (
+          <div className="space-y-2 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+            {(document.content_json as CoverLetterContent).body_paragraphs.map((paragraph, i) => {
+              const claim = claims.find((c) => c.claim_text === paragraph);
+              return (
+                <p
+                  key={i}
+                  onClick={() => setSelectedBullet(paragraph)}
+                  className={`cursor-pointer border-l-2 pl-2 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 ${
+                    claim ? STATUS_COLOR[claim.verification_status] : "border-transparent"
+                  }`}
+                >
+                  {paragraph}
+                </p>
+              );
+            })}
           </div>
         )}
       </div>

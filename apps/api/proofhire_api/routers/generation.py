@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +15,7 @@ from proofhire_api.models.job import Job
 from proofhire_api.models.repository import Repository
 from proofhire_api.models.user import User
 from proofhire_api.schemas.generation import (
+    ExportResponse,
     GenerateRequest,
     GenerateResponse,
     GeneratedClaimPublic,
@@ -89,6 +91,50 @@ async def get_document(
     if job is None or job.user_id != current_user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
     return document
+
+
+@router.post("/documents/{document_id}/export", response_model=ExportResponse)
+async def export_document_endpoint(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ExportResponse:
+    """Synchronous (not queued): one bounded Playwright render + parse-back
+    validation cycle, same rationale as resume upload and positioning."""
+    document = await db.get(GeneratedDocument, document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    job = await db.get(Job, document.job_id)
+    if job is None or job.user_id != current_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+
+    from proofhire_worker.render.export import ParseBackValidationError, export_document
+
+    try:
+        document = await export_document(db, document, current_user.email)
+    except ParseBackValidationError as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Export failed parse-back validation — missing content: {exc.missing}",
+        ) from exc
+
+    return ExportResponse(document_id=document.id, pdf_available=document.pdf_ref is not None)
+
+
+@router.get("/documents/{document_id}/pdf")
+async def download_document_pdf(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    document = await db.get(GeneratedDocument, document_id)
+    if document is None or not document.pdf_ref:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "PDF not found — export the document first")
+    job = await db.get(Job, document.job_id)
+    if job is None or job.user_id != current_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+
+    return FileResponse(document.pdf_ref, media_type="application/pdf", filename=f"resume-{document.id}.pdf")
 
 
 @router.get("/documents/{document_id}/claims", response_model=list[GeneratedClaimPublic])

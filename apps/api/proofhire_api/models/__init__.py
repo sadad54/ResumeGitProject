@@ -4,6 +4,7 @@ Import every model module here so Base.metadata is complete for Alembic
 autogenerate (apps/api/alembic/env.py imports this package).
 """
 
+from proofhire_api.models.application import Application  # noqa: F401
 from proofhire_api.models.evidence import Evidence, EvidenceSkill, EvidenceSource  # noqa: F401
 from proofhire_api.models.evidence_match import EvidenceMatch  # noqa: F401
 from proofhire_api.models.generated_claim import ClaimEvidence, GeneratedClaim  # noqa: F401
