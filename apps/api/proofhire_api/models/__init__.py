@@ -1,6 +1,11 @@
 """SQLAlchemy models, one module per aggregate.
 
-Domain tables land here phase by phase, not all up front — see the build plan's
-note against speculative schema churn. Phase 1 adds user.py, github_connection.py,
-repository.py, source_artifact.py.
+Import every model module here so Base.metadata is complete for Alembic
+autogenerate (apps/api/alembic/env.py imports this package).
 """
+
+from proofhire_api.models.github_connection import GitHubConnection  # noqa: F401
+from proofhire_api.models.repository import Repository  # noqa: F401
+from proofhire_api.models.source_artifact import SourceArtifact  # noqa: F401
+from proofhire_api.models.sync_run import SyncRun  # noqa: F401
+from proofhire_api.models.user import User  # noqa: F401

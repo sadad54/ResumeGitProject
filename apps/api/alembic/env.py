@@ -7,9 +7,7 @@ from sqlalchemy import pool
 
 from proofhire_api.config import get_settings
 from proofhire_api.db import Base
-
-# Import all model modules here as they're added, so Base.metadata is complete
-# for autogenerate. E.g.: from proofhire_api.models import user, repository  # noqa
+from proofhire_api import models  # noqa: F401  (populates Base.metadata)
 
 config = context.config
 if config.config_file_name is not None:

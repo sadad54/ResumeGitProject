@@ -11,7 +11,12 @@ dependencies = [
     "pydantic-settings>=2.6",
     "python-json-logger>=2.0",
     "httpx>=0.27",
+    "cryptography>=43.0",
+    "proofhire-contracts",
 ]
+
+[tool.uv.sources]
+proofhire-contracts = { path = "../../packages/contracts", editable = true }
 
 [project.optional-dependencies]
 dev = [
