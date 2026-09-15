@@ -24,12 +24,18 @@ from proofhire_prompts.claim_verify_v1 import (
     SYSTEM_PROMPT as CLAIM_VERIFY_SYSTEM,
     build_user_message as build_claim_verify_message,
 )
+from proofhire_prompts.cover_letter_write_v1 import (
+    PROMPT_VERSION as COVER_LETTER_WRITE_VERSION,
+    SYSTEM_PROMPT as COVER_LETTER_WRITE_SYSTEM,
+    build_repair_message as build_cover_letter_repair_message,
+    build_user_message as build_cover_letter_write_message,
+)
 from proofhire_prompts.resume_write_v1 import (
     CONSERVATIVE_INSTRUCTIONS,
     FULL_INSTRUCTIONS,
     PROMPT_VERSION as RESUME_WRITE_VERSION,
     SYSTEM_PROMPT as RESUME_WRITE_SYSTEM,
-    build_repair_message,
+    build_repair_message as build_resume_repair_message,
     build_user_message as build_resume_write_message,
 )
 from sqlalchemy import select
@@ -48,7 +54,11 @@ from proofhire_worker.intelligence.claim_finalizer import finalize_claim_status
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
 from proofhire_worker.intelligence.positioning import compute_positioning
 from proofhire_worker.intelligence.provider_factory import get_provider
-from proofhire_worker.intelligence.schemas import ClaimVerificationOutput, ResumeContentOutput
+from proofhire_worker.intelligence.schemas import (
+    ClaimVerificationOutput,
+    CoverLetterContentOutput,
+    ResumeContentOutput,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +98,17 @@ def _location_for_index(content: ResumeContentOutput, flat_index: int) -> tuple[
                 return ("bullet", e_i, b_i)
             idx += 1
     return ("unknown", -1, -1)
+
+
+def _flatten_paragraphs(content: CoverLetterContentOutput) -> list[tuple[int, str]]:
+    return list(enumerate(content.body_paragraphs))
+
+
+def _apply_paragraph_removals(
+    content: CoverLetterContentOutput, failed_indices: set[int]
+) -> CoverLetterContentOutput:
+    kept = [p for i, p in enumerate(content.body_paragraphs) if i not in failed_indices]
+    return content.model_copy(update={"body_paragraphs": kept})
 
 
 def _apply_removals(content: ResumeContentOutput, failed_locations: set[tuple[str, int, int]]) -> ResumeContentOutput:
@@ -230,13 +251,85 @@ async def _generate_resume(
                     ),
                 ),
                 Message(role="assistant", content=content.model_dump_json()),
-                Message(role="user", content=build_repair_message(failed_texts)),
+                Message(role="user", content=build_resume_repair_message(failed_texts)),
             ],
             schema=ResumeContentOutput,
             model_config=ModelConfig(model="claude-sonnet-5"),
         )
         usages.append(writer_result.usage)
         _log_llm_usage("resume_write", RESUME_WRITE_VERSION, writer_result, job_id_str)
+        content = writer_result.value
+
+    return content, all_finalized
+
+
+async def _generate_cover_letter(
+    provider, positioning, profile_facts, evidence_items, job_id_str: str, usages: list
+) -> tuple[CoverLetterContentOutput, list[tuple]]:
+    positioning_summary = (
+        f"Identity: {positioning.target_identity}\nThemes: {', '.join(positioning.themes)}\n"
+        f"Priority: {', '.join(positioning.project_priority)}\nAvoid: {', '.join(positioning.gaps_to_avoid)}"
+    )
+
+    writer_result = await provider.structured_generate(
+        task="cover_letter_write",
+        messages=[
+            Message(role="system", content=COVER_LETTER_WRITE_SYSTEM),
+            Message(
+                role="user",
+                content=build_cover_letter_write_message(
+                    positioning_summary, _format_profile_facts(profile_facts), _format_evidence(evidence_items)
+                ),
+            ),
+        ],
+        schema=CoverLetterContentOutput,
+        model_config=ModelConfig(model="claude-sonnet-5"),
+    )
+    usages.append(writer_result.usage)
+    _log_llm_usage("cover_letter_write", COVER_LETTER_WRITE_VERSION, writer_result, job_id_str)
+    content = writer_result.value
+
+    all_finalized: list[tuple] = []
+    for attempt in range(MAX_REPAIR_ATTEMPTS + 1):
+        units = _flatten_paragraphs(content)
+        finalized, _verify_result = await _run_claim_verification(
+            provider, units, profile_facts, evidence_items, job_id_str, usages
+        )
+        all_finalized = finalized
+
+        failed_indices = {
+            claim.bullet_index
+            for claim, status, _ in finalized
+            if status in (ClaimVerificationStatus.UNSUPPORTED, ClaimVerificationStatus.CONTRADICTORY)
+        }
+
+        if not failed_indices or attempt == MAX_REPAIR_ATTEMPTS:
+            content = _apply_paragraph_removals(content, failed_indices)
+            break
+
+        failed_texts = "\n".join(
+            f"- \"{claim.claim_text}\" ({status.value}: {claim.reason})"
+            for claim, status, _ in finalized
+            if status in (ClaimVerificationStatus.UNSUPPORTED, ClaimVerificationStatus.CONTRADICTORY)
+        )
+        writer_result = await provider.structured_generate(
+            task="cover_letter_write",
+            messages=[
+                Message(role="system", content=COVER_LETTER_WRITE_SYSTEM),
+                Message(
+                    role="user",
+                    content=build_cover_letter_write_message(
+                        positioning_summary, _format_profile_facts(profile_facts), _format_evidence(evidence_items)
+                    ),
+                ),
+                Message(role="assistant", content=content.model_dump_json()),
+                Message(role="user", content=build_cover_letter_repair_message(failed_texts)),
+            ],
+            schema=CoverLetterContentOutput,
+            model_config=ModelConfig(model="claude-sonnet-5"),
+        )
+        usages.append(writer_result.usage)
+        _log_llm_usage("cover_letter_write", COVER_LETTER_WRITE_VERSION, writer_result, job_id_str)
         content = writer_result.value
 
     return content, all_finalized
@@ -295,14 +388,19 @@ async def _generate(job_id_str: str, mode_str: str, document_type_str: str) -> N
                     provider, mode, positioning, profile_facts, evidence_items, job_id_str, usages
                 )
                 content_json = content.model_dump()
+                prompt_versions = ["position:v1", RESUME_WRITE_VERSION, CLAIM_VERIFY_VERSION]
             else:
-                raise NotImplementedError("Cover letter generation not yet wired — resume only in this pass")
+                content, finalized_claims = await _generate_cover_letter(
+                    provider, positioning, profile_facts, evidence_items, job_id_str, usages
+                )
+                content_json = content.model_dump()
+                prompt_versions = ["position:v1", COVER_LETTER_WRITE_VERSION, CLAIM_VERIFY_VERSION]
 
             document = GeneratedDocument(
                 job_id=job.id,
                 generation_run_id=generation_run.id,
                 type=document_type,
-                template_id="ats_minimal",
+                template_id="ats_minimal" if document_type == DocumentType.RESUME else "standard_cover_letter",
                 content_json=content_json,
             )
             session.add(document)
@@ -329,9 +427,7 @@ async def _generate(job_id_str: str, mode_str: str, document_type_str: str) -> N
                     )
 
             generation_run.status = GenerationRunStatus.SUCCEEDED
-            generation_run.prompt_versions = [
-                "position:v1", RESUME_WRITE_VERSION, CLAIM_VERIFY_VERSION,
-            ]
+            generation_run.prompt_versions = prompt_versions
             generation_run.token_usage = {
                 "input_tokens": sum(u.input_tokens for u in usages),
                 "output_tokens": sum(u.output_tokens for u in usages),
