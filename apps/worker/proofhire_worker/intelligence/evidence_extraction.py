@@ -32,6 +32,7 @@ from proofhire_api.security.token_crypto import decrypt_token
 from proofhire_api.services.github_client import GitHubClient
 from proofhire_contracts.embedding import EMBEDDING_MODEL
 from proofhire_worker.events import publish_event
+from proofhire_worker.intelligence.confidence import combine_confidence
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
 from proofhire_worker.intelligence.provider_factory import get_embedding_provider, get_provider
 from proofhire_worker.intelligence.schemas import EvidenceExtractionOutput
@@ -110,6 +111,15 @@ async def _extract_for_repository(repository_id_str: str, run_id_str: str) -> No
         repo_full_name = f"{repository.owner}/{repository.name}"
         total_saved = 0
 
+        # Deterministic signal from Phase 1's tech_extraction (dependencies,
+        # frameworks) — used to modestly boost confidence when the LLM's claimed
+        # skill overlaps with what static parsing of manifests already confirmed.
+        deterministic_tech: set[str] = set()
+        for key in ("dependencies", "frameworks"):
+            deterministic_tech.update(
+                str(v).strip().lower() for v in (repository.language_summary or {}).get(key, [])
+            )
+
         for group in _group_files(files):
             user_message = build_user_message(repo_full_name, group)
             try:
@@ -128,6 +138,25 @@ async def _extract_for_repository(repository_id_str: str, run_id_str: str) -> No
                     extra={"repository_id": repository_id_str, "group_paths": [p for p, _ in group]},
                 )
                 continue
+
+            # Observability seeded from this phase onward (PRD §29) rather than
+            # bolted on later — Phase 9's eval cost/latency reports and Phase 10's
+            # dashboards both need this history to already exist by then.
+            logger.info(
+                "llm_call_completed",
+                extra={
+                    "task": "evidence_extract",
+                    "prompt_version": PROMPT_VERSION,
+                    "provider": result.usage.provider,
+                    "model": result.usage.model,
+                    "input_tokens": result.usage.input_tokens,
+                    "output_tokens": result.usage.output_tokens,
+                    "latency_ms": result.usage.latency_ms,
+                    "estimated_cost_usd": result.usage.estimated_cost_usd,
+                    "repository_id": repository_id_str,
+                    "run_id": run_id_str,
+                },
+            )
 
             candidates: list[EvidenceCandidate] = []
             for item in result.value.evidence:
@@ -161,6 +190,13 @@ async def _extract_for_repository(repository_id_str: str, run_id_str: str) -> No
                     embedding = None
                     logger.warning("embedding_failed", extra={"repository_id": repository_id_str})
 
+                confidence = combine_confidence(
+                    semantic_confidence=item.confidence,
+                    source_count=len(sources),
+                    skill_names=item.skills,
+                    deterministic_tech=deterministic_tech,
+                )
+
                 candidates.append(
                     EvidenceCandidate(
                         user_id=repository.user_id,
@@ -169,7 +205,7 @@ async def _extract_for_repository(repository_id_str: str, run_id_str: str) -> No
                         title=item.title,
                         normalized_claim=item.normalized_claim,
                         description=item.description,
-                        confidence=item.confidence,
+                        confidence=confidence,
                         extraction_method=PROMPT_VERSION,
                         sources=sources,
                         skill_names=item.skills,
