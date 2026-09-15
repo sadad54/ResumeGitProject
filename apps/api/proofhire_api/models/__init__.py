@@ -5,6 +5,7 @@ autogenerate (apps/api/alembic/env.py imports this package).
 """
 
 from proofhire_api.models.evidence import Evidence, EvidenceSkill, EvidenceSource  # noqa: F401
+from proofhire_api.models.evidence_match import EvidenceMatch  # noqa: F401
 from proofhire_api.models.github_connection import GitHubConnection  # noqa: F401
 from proofhire_api.models.job import Job  # noqa: F401
 from proofhire_api.models.repository import Repository  # noqa: F401

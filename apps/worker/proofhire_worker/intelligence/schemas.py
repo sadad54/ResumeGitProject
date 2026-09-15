@@ -45,3 +45,15 @@ class JDAnalysisOutput(BaseModel):
     company: str = ""
     seniority: str = ""
     requirements: list[RequirementOutput] = Field(default_factory=list)
+
+
+class RerankOutput(BaseModel):
+    best_evidence_index: int | None = Field(
+        description="Index of the best-supporting candidate, or null if none adequately support the requirement"
+    )
+    label: str = Field(description="One of: strong, partial, gap, unknown")
+    directness: float = Field(ge=0.0, le=1.0)
+    depth: float = Field(ge=0.0, le=1.0)
+    recency: float = Field(ge=0.0, le=1.0)
+    source_quality: float = Field(ge=0.0, le=1.0)
+    reason: str = ""

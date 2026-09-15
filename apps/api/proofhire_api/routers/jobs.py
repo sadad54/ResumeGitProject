@@ -1,15 +1,25 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from proofhire_contracts import MatchLabel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proofhire_api.db import get_db
 from proofhire_api.dependencies import get_current_user
+from proofhire_api.models.evidence import Evidence
+from proofhire_api.models.evidence_match import EvidenceMatch
 from proofhire_api.models.job import Job
+from proofhire_api.models.repository import Repository
 from proofhire_api.models.requirement import Requirement
 from proofhire_api.models.user import User
-from proofhire_api.schemas.job import AnalyzeResponse, JobCreateRequest, JobPublic, RequirementPublic
+from proofhire_api.schemas.job import (
+    AnalyzeResponse,
+    CoverageRow,
+    JobCreateRequest,
+    JobPublic,
+    RequirementPublic,
+)
 from proofhire_api.services.jd_fetch import JDFetchError, fetch_and_extract_text
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
@@ -93,3 +103,70 @@ async def get_requirements(
         .order_by(Requirement.importance.desc())
     )
     return list(result.all())
+
+
+@router.get("/{job_id}/coverage", response_model=list[CoverageRow])
+async def get_coverage(
+    job_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[CoverageRow]:
+    """Evidence Coverage Matrix (PRD §18). A requirement with no EvidenceMatch
+    row is an implicit Gap — the coverage engine never even retrieved a
+    plausible candidate for it (PRD §17)."""
+    job = await db.get(Job, job_id)
+    if job is None or job.user_id != current_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
+
+    requirements = list(
+        await db.scalars(
+            select(Requirement)
+            .where(Requirement.job_id == job_id)
+            .order_by(Requirement.importance.desc())
+        )
+    )
+
+    rows: list[CoverageRow] = []
+    for requirement in requirements:
+        match = await db.scalar(
+            select(EvidenceMatch).where(EvidenceMatch.requirement_id == requirement.id)
+        )
+
+        if match is None:
+            rows.append(
+                CoverageRow.build(
+                    requirement_id=requirement.id,
+                    requirement_text=requirement.text,
+                    category=requirement.category,
+                    required=requirement.required,
+                    importance=requirement.importance,
+                    match_label=MatchLabel.GAP,
+                    evidence_id=None,
+                    evidence_title=None,
+                    evidence_repository=None,
+                    confidence=None,
+                    explanation="No candidate evidence was found for this requirement.",
+                )
+            )
+            continue
+
+        evidence = await db.get(Evidence, match.evidence_id)
+        repository = await db.get(Repository, evidence.repository_id) if evidence else None
+
+        rows.append(
+            CoverageRow.build(
+                requirement_id=requirement.id,
+                requirement_text=requirement.text,
+                category=requirement.category,
+                required=requirement.required,
+                importance=requirement.importance,
+                match_label=match.status,
+                evidence_id=evidence.id if evidence else None,
+                evidence_title=evidence.title if evidence else None,
+                evidence_repository=f"{repository.owner}/{repository.name}" if repository else None,
+                confidence=evidence.confidence if evidence else None,
+                explanation=match.match_reason,
+            )
+        )
+
+    return rows

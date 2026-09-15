@@ -108,6 +108,14 @@ async def _analyze(job_id_str: str) -> None:
             {"job_id": job_id_str, "requirements_created": len(saved)},
         )
 
+        # Chained rather than inline (same pattern as sync -> extract_evidence in
+        # Phase 1/2): coverage computation runs multiple sequential LLM calls
+        # (one rerank per requirement) and shouldn't block this task's completion
+        # or retry semantics.
+        from proofhire_worker.intelligence.coverage import compute_coverage
+
+        compute_coverage.send(job_id_str)
+
 
 @dramatiq.actor(max_retries=1, queue_name="ai", time_limit=120_000)
 def analyze_job(job_id: str) -> None:
