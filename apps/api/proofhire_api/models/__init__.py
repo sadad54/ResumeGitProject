@@ -6,8 +6,12 @@ autogenerate (apps/api/alembic/env.py imports this package).
 
 from proofhire_api.models.evidence import Evidence, EvidenceSkill, EvidenceSource  # noqa: F401
 from proofhire_api.models.evidence_match import EvidenceMatch  # noqa: F401
+from proofhire_api.models.generated_claim import ClaimEvidence, GeneratedClaim  # noqa: F401
+from proofhire_api.models.generated_document import GeneratedDocument  # noqa: F401
+from proofhire_api.models.generation_run import GenerationRun  # noqa: F401
 from proofhire_api.models.github_connection import GitHubConnection  # noqa: F401
 from proofhire_api.models.job import Job  # noqa: F401
+from proofhire_api.models.profile_fact import ProfileFact  # noqa: F401
 from proofhire_api.models.repository import Repository  # noqa: F401
 from proofhire_api.models.requirement import Requirement  # noqa: F401
 from proofhire_api.models.skill import Skill  # noqa: F401
