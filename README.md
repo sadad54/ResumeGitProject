@@ -57,12 +57,61 @@ interface (OpenAI + Anthropic) · SSE for streaming · Playwright/Chromium for P
 
 ## Local development
 
+**With Docker** (what `infra/docker/docker-compose.yml` assumes):
+
 ```bash
 cp .env.example .env   # fill in secrets before running anything that touches them
 docker compose -f infra/docker/docker-compose.yml up -d
 ```
 
-API and web app setup instructions land as each is scaffolded — see the build plan below.
+**Without Docker** (verified working setup, e.g. on a machine without Docker Desktop):
+run Postgres+pgvector and Redis inside WSL2 instead — they're both native Linux
+services, so this works as well as the container images do.
+
+```bash
+# One-time setup, inside WSL (Ubuntu):
+sudo apt-get install -y postgresql postgresql-18-pgvector redis-server
+# If port 5432 is already taken by a native Windows Postgres install, change WSL's
+# Postgres to listen on 5433 instead (edit /etc/postgresql/18/main/postgresql.conf:
+# port = 5433, listen_addresses = '*') and add a scram-sha-256 host rule to
+# pg_hba.conf for 0.0.0.0/0 so the Windows-side API process can reach it.
+sudo -u postgres psql -c "CREATE USER proofhire WITH PASSWORD 'proofhire' CREATEDB;"
+sudo -u postgres psql -c "CREATE DATABASE proofhire OWNER proofhire;"
+sudo -u postgres psql -d proofhire -c "CREATE EXTENSION IF NOT EXISTS vector;"
+sudo service postgresql start
+redis-server --daemonize yes --bind 0.0.0.0 --protected-mode no
+```
+
+WSL2 forwards ports its services listen on to `localhost` on the Windows side
+automatically, so `DATABASE_URL`/`REDIS_URL` in `.env` can point at
+`localhost:5433`/`localhost:6379` (adjust the Postgres port to match whatever you
+configured) whether the API/worker processes run on Windows or inside WSL.
+
+**Running the API** (Python 3.13+ required — WSL's Ubuntu ships a new enough
+Python; Windows may not):
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e packages/contracts -e 'apps/api[dev]' -e 'apps/worker[dev]'
+cd apps/api && alembic upgrade head
+uvicorn proofhire_api.main:app --reload
+```
+
+Verify with `curl localhost:8000/health` and `curl localhost:8000/ready`.
+
+**Running the web app:**
+
+```bash
+cd apps/web
+cp .env.example .env.local
+npm install && npm run dev
+```
+
+**GitHub OAuth** requires registering an OAuth App (github.com → Settings →
+Developer settings → OAuth Apps) with callback URL
+`http://localhost:8000/api/v1/github/callback`, then setting
+`GITHUB_OAUTH_CLIENT_ID`/`GITHUB_OAUTH_CLIENT_SECRET` in `.env`. Everything else
+(auth, health checks, repository listing once connected) works without it.
 
 ## Build plan
 

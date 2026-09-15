@@ -60,3 +60,6 @@ npm-debug.log*
 coverage/
 .coverage
 htmlcov/
+
+# Claude Code harness session state (not project content)
+.claude/
