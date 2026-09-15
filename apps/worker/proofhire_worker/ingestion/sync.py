@@ -155,6 +155,14 @@ async def _run(run_id_str: str, repository_ids: list[str]) -> None:
                 client = GitHubClient(token)
                 await _sync_one_repository(session, client, repository, run_id)
 
+                # Enqueued on the separate `ai` queue rather than called inline —
+                # keeps ingestion (this module) and intelligence (Phase 2+) scaling
+                # independently per PRD §28, and means a slow/failed LLM call can't
+                # block the rest of this sync run.
+                from proofhire_worker.intelligence.evidence_extraction import extract_evidence
+
+                extract_evidence.send(str(repository.id), run_id_str)
+
             sync_run.status = SyncStatus.COMPLETED
         except Exception as exc:  # noqa: BLE001 — surfaced via SyncRun.error + event
             sync_run.status = SyncStatus.FAILED
