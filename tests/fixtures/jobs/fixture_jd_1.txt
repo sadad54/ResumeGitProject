@@ -1,0 +1,39 @@
+Backend Software Engineer (Mid-Level) — Platform Team
+
+About the role:
+We're looking for a mid-level backend engineer to join our Platform team building the
+services that power our core product. You'll work across our API layer, background
+job processing, and data infrastructure, partnering closely with frontend and ML
+engineers to ship reliable, well-tested features.
+
+Responsibilities:
+- Design, build, and maintain RESTful APIs and background workers that handle
+  asynchronous processing at scale.
+- Write clean, well-tested Python code, with an emphasis on correctness and
+  maintainability over cleverness.
+- Work with relational databases (PostgreSQL) to design efficient schemas and
+  queries, including migrations for evolving data models.
+- Integrate with third-party APIs and internal services, handling authentication,
+  rate limiting, and error recovery robustly.
+- Participate in code review and help maintain CI/CD pipelines.
+- Collaborate with product and design to translate requirements into technical
+  designs.
+
+Required qualifications:
+- 2+ years of professional experience building backend services in Python or a
+  similar language.
+- Experience with a modern web framework (FastAPI, Django, or Flask).
+- Solid understanding of relational databases and SQL.
+- Experience with containerization (Docker) and basic CI/CD workflows.
+- Familiarity with asynchronous task queues (Celery, Dramatiq, or similar).
+- Strong written communication and ability to work independently.
+
+Preferred qualifications:
+- Experience with PostgreSQL extensions (e.g. pgvector) or vector search concepts.
+- Experience integrating with LLM APIs (OpenAI, Anthropic) in production systems.
+- Familiarity with TypeScript/React on the frontend side.
+- Experience with OAuth-based third-party integrations (e.g. GitHub, Google).
+- Exposure to observability tooling (structured logging, tracing, error reporting).
+
+We're a small, remote-friendly team that values pragmatic engineering, clear writing,
+and shipping things that work end-to-end over speculative architecture.

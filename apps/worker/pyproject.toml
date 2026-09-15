@@ -1,0 +1,29 @@
+[project]
+name = "proofhire-worker"
+version = "0.1.0"
+description = "ProofHire async ingestion/AI/render workers"
+requires-python = ">=3.13"
+dependencies = [
+    "dramatiq[redis]>=1.17",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "python-json-logger>=2.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.7",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

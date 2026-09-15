@@ -1,0 +1,41 @@
+/**
+ * Semantic design tokens (PRD §33). Component primitives are added incrementally
+ * per screen starting Phase 1, not built as a big upfront library (per build plan).
+ */
+
+:root {
+  /* Spacing rhythm: 4/8px */
+  --ph-space-1: 4px;
+  --ph-space-2: 8px;
+  --ph-space-3: 12px;
+  --ph-space-4: 16px;
+  --ph-space-6: 24px;
+  --ph-space-8: 32px;
+
+  /* Radii hierarchy */
+  --ph-radius-sm: 6px;
+  --ph-radius-md: 10px;
+  --ph-radius-lg: 16px;
+
+  /* Semantic color tokens — never hard-code feature colors elsewhere */
+  --ph-color-bg: #ffffff;
+  --ph-color-fg: #0a0a0a;
+  --ph-color-border: #e5e5e5;
+  --ph-color-accent: #2563eb;
+  --ph-color-success: #16a34a;
+  --ph-color-warning: #d97706;
+  --ph-color-danger: #dc2626;
+
+  /* Match-label colors (never sole carrier of status — always paired with text/icon) */
+  --ph-color-match-strong: #16a34a;
+  --ph-color-match-partial: #d97706;
+  --ph-color-match-gap: #dc2626;
+  --ph-color-match-unknown: #737373;
+}
+
+:root[data-theme="dark"] {
+  --ph-color-bg: #0a0a0a;
+  --ph-color-fg: #fafafa;
+  --ph-color-border: #262626;
+  --ph-color-accent: #60a5fa;
+}
