@@ -1,6 +1,7 @@
 """FastAPI application factory."""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from proofhire_api.config import get_settings
 from proofhire_api.logging import configure_logging
@@ -29,6 +30,20 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(TraceIdMiddleware)
+    # The web app (localhost:3000) and API (localhost:8000) are different
+    # origins in local dev, so the browser sends CORS preflight OPTIONS
+    # requests before any cross-origin POST/PATCH/etc. Without this, every
+    # mutating request from the actual browser UI fails with 405 on the
+    # preflight — direct HTTP-client testing (PowerShell, curl) never hits
+    # this since those don't do CORS preflight, which is why it went
+    # unnoticed until real browser testing.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[settings.web_base_url],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     app.include_router(health.router)
     app.include_router(auth.router)
@@ -40,7 +55,6 @@ def create_app() -> FastAPI:
     app.include_router(generation.router)
     app.include_router(applications.router)
 
-    _ = settings  # settings wired to routers as they're added
     return app
 
 
