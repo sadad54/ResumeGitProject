@@ -20,7 +20,7 @@ jobs:
           POSTGRES_DB: proofhire
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U proofhire' --health-interval 5s
+          --health-cmd "pg_isready -U proofhire" --health-interval 5s
           --health-timeout 5s --health-retries 10
       redis:
         image: redis:7-alpine
