@@ -18,7 +18,7 @@ This increment starts from phase 6 commit `c38a9ce`, incorporates the subsequent
 - TypeScript, ESLint and the production Next.js build passed. Production npm audit reported zero known vulnerabilities at verification time.
 - Three resume templates were rendered by Chromium and their sections, dates, employer and bullet claims were extracted and checked from real PDFs. This is a small regression fixture, not the full ≥99% corpus target.
 
-Local relational tests used an ephemeral SQLite database with the production SQLAlchemy models. The host offers Python 3.12; CI is configured for the project's required Python 3.13 and PostgreSQL+pgvector. The full PostgreSQL migration/integration suite, Docker images and hosted CI must still pass. No live provider credentials or deployed staging environment were used. Browser tests use synthetic fixtures; they are not evidence of a complete real GitHub-to-PDF journey.
+Local relational tests used an ephemeral SQLite database with the production SQLAlchemy models. The host offers Python 3.12; CI is configured for the project's required Python 3.13 and PostgreSQL+pgvector. Hosted CI subsequently passed on commit `4d7fd80`: PostgreSQL migrations, all 138 Python tests on Python 3.13, frontend lint/type/build and eight browser tests, five extension tests, dependency audits and secret scanning. Docker builds run on master and have not yet been verified. No live provider credentials or deployed staging environment were used. Browser tests use synthetic fixtures; they are not evidence of a complete real GitHub-to-PDF journey.
 
 ## Remaining acceptance gates (requirements retained)
 
