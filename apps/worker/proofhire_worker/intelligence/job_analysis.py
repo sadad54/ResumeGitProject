@@ -114,6 +114,8 @@ async def _analyze(job_id_str: str) -> None:
         # or retry semantics.
         from proofhire_worker.intelligence.coverage import compute_coverage
 
+        job.status = "matching"
+        await session.commit()
         compute_coverage.send(job_id_str)
 
 
@@ -122,3 +124,4 @@ def analyze_job(job_id: str) -> None:
     import asyncio
 
     asyncio.run(_analyze(job_id))
+

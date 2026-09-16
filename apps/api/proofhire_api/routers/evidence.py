@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +18,21 @@ from proofhire_api.schemas.evidence import (
     EvidenceSearchRequest,
     EvidenceSourcePublic,
 )
+from proofhire_api.schemas.graph import EvidenceGraph
+from proofhire_api.services.evidence_graph import project_graph
 
 router = APIRouter(prefix="/api/v1/evidence", tags=["evidence"])
+
+
+@router.get("/graph", response_model=EvidenceGraph)
+async def get_evidence_graph(
+    job_id: uuid.UUID | None = None,
+    repository_id: uuid.UUID | None = None,
+    limit: int = Query(default=200, ge=1, le=1000),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> EvidenceGraph:
+    return await project_graph(db, current_user.id, job_id, repository_id, limit)
 
 
 @router.get("", response_model=list[EvidencePublic])

@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from proofhire_contracts import MatchLabel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proofhire_api.db import get_db
@@ -13,6 +14,7 @@ from proofhire_api.models.job import Job
 from proofhire_api.models.repository import Repository
 from proofhire_api.models.requirement import Requirement
 from proofhire_api.models.user import User
+from proofhire_api.schemas.capture import JobCaptureRequest
 from proofhire_api.schemas.job import (
     AnalyzeResponse,
     CoverageRow,
@@ -23,6 +25,45 @@ from proofhire_api.schemas.job import (
 from proofhire_api.services.jd_fetch import JDFetchError, fetch_and_extract_text
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
+
+
+@router.post("/capture", response_model=JobPublic, status_code=status.HTTP_201_CREATED)
+async def capture_job(
+    body: JobCaptureRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Job:
+    # A random capture UUID makes extension retries idempotent. Never return
+    # another user's row even if a caller supplies its ID.
+    existing = await db.get(Job, body.capture_id)
+    if existing:
+        if existing.user_id != current_user.id:
+            raise HTTPException(409, "Capture ID unavailable")
+        return existing
+    from proofhire_worker.ingestion.secret_scanner import contains_secret
+
+    if contains_secret("\n".join([body.selected_text, body.title or "", body.page_url or ""])):
+        raise HTTPException(422, "Potential secret detected. Remove it before capturing this job.")
+    job = Job(
+        id=body.capture_id,
+        user_id=current_user.id,
+        source_text=body.selected_text,
+        source_url=body.page_url,
+        source_title=body.title,
+    )
+    if body.captured_at:
+        job.captured_at = body.captured_at
+    db.add(job)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        existing = await db.get(Job, body.capture_id)
+        if existing and existing.user_id == current_user.id:
+            return existing
+        raise HTTPException(409, "Capture ID unavailable") from None
+    await db.refresh(job)
+    return job
 
 
 @router.post("", response_model=JobPublic, status_code=status.HTTP_201_CREATED)
@@ -67,7 +108,9 @@ async def get_job(
     return job
 
 
-@router.post("/{job_id}/analyze", response_model=AnalyzeResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{job_id}/analyze", response_model=AnalyzeResponse, status_code=status.HTTP_202_ACCEPTED
+)
 async def analyze_job_endpoint(
     job_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -76,6 +119,9 @@ async def analyze_job_endpoint(
     job = await db.get(Job, job_id)
     if job is None or job.user_id != current_user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
+
+    if job.status in {"analyzing", "matching"}:
+        return AnalyzeResponse(job_id=job.id, status="queued")
 
     from proofhire_worker.broker import broker  # noqa: F401  (configures the Redis broker)
     from proofhire_worker.intelligence.job_analysis import analyze_job

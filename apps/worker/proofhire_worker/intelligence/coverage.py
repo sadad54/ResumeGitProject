@@ -13,15 +13,14 @@ import logging
 import uuid
 
 import dramatiq
-from proofhire_contracts import RunEventName
-from proofhire_prompts.rerank_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
-from sqlalchemy import select
-
 from proofhire_api.db import async_session_factory
 from proofhire_api.models.evidence_match import EvidenceMatch
 from proofhire_api.models.job import Job
 from proofhire_api.models.requirement import Requirement
 from proofhire_api.repositories.evidence import EvidenceQuery, SQLAlchemyEvidenceRepository
+from proofhire_prompts.rerank_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
+from sqlalchemy import delete, select
+
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
 from proofhire_worker.intelligence.match_label import resolve_match_label
 from proofhire_worker.intelligence.provider_factory import get_embedding_provider, get_provider
@@ -55,7 +54,14 @@ async def _compute_coverage(job_id_str: str) -> None:
             await session.scalars(select(Requirement).where(Requirement.job_id == job_id))
         )
         if not requirements:
+            job.status = "ready"
+            await session.commit()
             return
+
+        # Recompute atomically; old matches cannot survive a changed ranking.
+        await session.execute(delete(EvidenceMatch).where(
+            EvidenceMatch.requirement_id.in_([r.id for r in requirements])
+        ))
 
         evidence_repo = SQLAlchemyEvidenceRepository(session)
         strong = partial = gap = unknown = 0
@@ -169,6 +175,7 @@ async def _compute_coverage(job_id_str: str) -> None:
             else:
                 unknown += 1
 
+        job.status = "coverage_failed" if unknown else "ready"
         await session.commit()
 
         # Not re-publishing job.analysis.completed here: job_analysis.py already
@@ -187,3 +194,4 @@ async def _compute_coverage(job_id_str: str) -> None:
                 "unknown": unknown,
             },
         )
+

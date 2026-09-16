@@ -7,7 +7,8 @@ Evidence Graph, maps job requirements to defensible code-derived evidence using 
 retrieval and reranking, and generates verified application materials with claim-level
 citations and hallucination guards. Unsupported claims are blocked from export.
 
-> Status: early build. See [`docs/product/PRD.md`](docs/product/PRD.md) for the full
+> Status: phase 7/8 implementation plus evaluation and hardening foundations. See
+> [`docs/product/BUILD_STATUS.md`](docs/product/BUILD_STATUS.md) for verified behavior and remaining release gates. See [`docs/product/PRD.md`](docs/product/PRD.md) for the full
 > product spec and [`docs/adr/`](docs/adr/) for architectural decisions.
 
 ## Why this exists
@@ -123,3 +124,4 @@ GitHub repository and a set of fixture job descriptions before scope broadens.
 ## License
 
 TBD.
+

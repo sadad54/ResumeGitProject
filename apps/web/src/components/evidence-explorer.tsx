@@ -29,12 +29,15 @@ const STATUS_LABEL: Record<string, string> = {
  * which is also the permanent accessible fallback the graph view needs (§11.8).
  */
 export function EvidenceExplorer() {
+  const [query, setQuery] = useState("");
+  const [signedIn, setSignedIn] = useState(false);
   const [items, setItems] = useState<Evidence[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setSignedIn(!!getAccessToken());
     if (!getAccessToken()) return;
     void load();
   }, []);
@@ -46,30 +49,58 @@ export function EvidenceExplorer() {
       const list = await apiFetch<Evidence[]>("/api/v1/evidence");
       setItems(list);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load evidence");
+      setError(
+        err instanceof ApiError ? err.message : "Failed to load evidence",
+      );
     } finally {
       setLoading(false);
     }
   }
 
   async function setStatus(id: string, status: string) {
-    const updated = await apiFetch<Evidence>(`/api/v1/evidence/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    });
-    setItems((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+    try {
+      const updated = await apiFetch<Evidence>(`/api/v1/evidence/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      setItems((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+      window.dispatchEvent(new Event("proofhire:evidence-updated"));
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not update evidence.",
+      );
+    }
   }
 
-  if (!getAccessToken()) {
-    return <p className="text-sm text-neutral-500">Log in on Home to view evidence.</p>;
+  if (!signedIn) {
+    return (
+      <p className="text-sm text-neutral-500">
+        Log in on Home to view evidence.
+      </p>
+    );
   }
 
-  const visible = items.filter((e) => statusFilter === "all" || e.status === statusFilter);
+  const visible = items.filter(
+    (e) =>
+      (statusFilter === "all" || e.status === statusFilter) &&
+      `${e.title} ${e.normalized_claim}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+  );
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="ph-field">
+          Search evidence
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
         <select
+          aria-label="Filter evidence status"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"

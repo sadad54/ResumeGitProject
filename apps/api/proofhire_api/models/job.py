@@ -18,6 +18,7 @@ class Job(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     source_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_text: Mapped[str] = mapped_column(Text, nullable=False)
     company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -27,3 +28,4 @@ class Job(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="captured")
+

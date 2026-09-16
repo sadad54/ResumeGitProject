@@ -1,6 +1,8 @@
 """FastAPI application factory."""
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from proofhire_api.config import get_settings
@@ -43,7 +45,21 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Trace-Id"],
     )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(_request, exc):
+        # Validation errors must not echo potentially sensitive request input.
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": [
+                    {"loc": list(e["loc"]), "type": e["type"], "msg": "Invalid value"}
+                    for e in exc.errors()
+                ]
+            },
+        )
 
     app.include_router(health.router)
     app.include_router(auth.router)

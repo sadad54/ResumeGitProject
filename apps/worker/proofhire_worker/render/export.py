@@ -24,9 +24,19 @@ class ParseBackValidationError(Exception):
         super().__init__(f"Parse-back validation failed — missing: {missing}")
 
 
-async def export_document(session: AsyncSession, document: GeneratedDocument, contact_email: str) -> GeneratedDocument:
+async def export_document(
+    session: AsyncSession,
+    document: GeneratedDocument,
+    contact_email: str,
+    template_id: str | None = None,
+) -> GeneratedDocument:
+    chosen_template = (
+        (template_id or document.template_id)
+        if document.type == DocumentType.RESUME
+        else document.template_id
+    )
     if document.type == DocumentType.RESUME:
-        html_content = render_resume_html(document.content_json, contact_email)
+        html_content = render_resume_html(document.content_json, contact_email, chosen_template)
         required_texts = list(RESUME_REQUIRED_SECTIONS)
     else:
         html_content = render_cover_letter_html(document.content_json, contact_email)
@@ -52,6 +62,7 @@ async def export_document(session: AsyncSession, document: GeneratedDocument, co
 
     plaintext = extract_pdf_text(pdf_bytes)
 
+    document.template_id = chosen_template
     document.html_ref = save_bytes("html", "html", html_content)
     document.pdf_ref = save_bytes("pdf", "pdf", pdf_bytes)
     document.plaintext_ref = save_bytes("plaintext", "txt", plaintext)

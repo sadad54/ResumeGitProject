@@ -63,3 +63,9 @@ htmlcov/
 
 # Claude Code harness session state (not project content)
 .claude/
+
+
+# Browser verification artifacts
+**/test-results/
+**/playwright-report/
+reports/
