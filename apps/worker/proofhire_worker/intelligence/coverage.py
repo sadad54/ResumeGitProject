@@ -24,6 +24,7 @@ from sqlalchemy import delete, select
 
 from proofhire_worker.db import async_session_factory
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
+from proofhire_worker.intelligence.model_selection import config_for, embedding_model
 from proofhire_worker.intelligence.match_label import resolve_match_label
 from proofhire_worker.intelligence.provider_factory import get_embedding_provider, get_provider
 from proofhire_worker.intelligence.schemas import RerankOutput
@@ -45,7 +46,7 @@ async def _compute_coverage(job_id_str: str) -> None:
     job_id = uuid.UUID(job_id_str)
     provider = get_provider()
     embedding_provider = get_embedding_provider()
-    model_config = ModelConfig(model="claude-sonnet-5")
+    model_config = config_for("rerank")
 
     async with async_session_factory() as session:
         job = await session.get(Job, job_id)
@@ -80,7 +81,7 @@ async def _compute_coverage(job_id_str: str) -> None:
                 return
             try:
                 [embedding] = await embedding_provider.embed(
-                    [requirement.text], model="text-embedding-3-small"
+                    [requirement.text], model=embedding_model()
                 )
             except Exception:
                 embedding = None

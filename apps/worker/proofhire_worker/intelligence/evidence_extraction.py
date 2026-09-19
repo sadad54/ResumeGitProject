@@ -35,6 +35,7 @@ from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.intelligence.confidence import combine_confidence
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
+from proofhire_worker.intelligence.model_selection import config_for
 from proofhire_worker.intelligence.provider_factory import get_embedding_provider, get_provider
 from proofhire_worker.intelligence.schemas import EvidenceExtractionOutput
 
@@ -70,7 +71,7 @@ async def _extract_for_repository(
     repository_id_str: str, run_id_str: str, artifact_ids: list[str] | None = None
 ) -> None:
     repository_id = uuid.UUID(repository_id_str)
-    model_config = ModelConfig(model="claude-sonnet-5")
+    model_config = config_for("evidence_extract")
 
     async with async_session_factory() as session:
         repository = await session.get(Repository, repository_id)

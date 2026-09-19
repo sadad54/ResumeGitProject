@@ -21,6 +21,7 @@ from proofhire_prompts.jd_extract_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build
 from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
+from proofhire_worker.intelligence.model_selection import config_for
 from proofhire_worker.intelligence.provider_factory import get_provider
 from proofhire_worker.intelligence.schemas import JDAnalysisOutput
 
@@ -33,7 +34,7 @@ VALID_CATEGORIES = {c.value for c in RequirementCategory}
 async def _analyze(job_id_str: str) -> None:
     job_id = uuid.UUID(job_id_str)
     provider = get_provider()
-    model_config = ModelConfig(model="claude-sonnet-5")
+    model_config = config_for("jd_extract")
 
     async with async_session_factory() as session:
         job = await session.get(Job, job_id)

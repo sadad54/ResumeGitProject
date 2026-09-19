@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig, StructuredResult
+from proofhire_worker.intelligence.model_selection import config_for
 from proofhire_worker.intelligence.provider_factory import get_provider
 from proofhire_worker.intelligence.schemas import PositioningOutput
 
@@ -46,6 +47,6 @@ async def compute_positioning(session: AsyncSession, job: Job) -> tuple[Position
             Message(role="user", content=build_user_message(job.role or "Unknown role", coverage_summary)),
         ],
         schema=PositioningOutput,
-        model_config=ModelConfig(model="claude-sonnet-5"),
+        model_config=config_for("position"),
     )
     return result.value, result

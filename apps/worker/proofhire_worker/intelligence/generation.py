@@ -72,6 +72,7 @@ from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.intelligence.claim_finalizer import finalize_claim_status
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
+from proofhire_worker.intelligence.model_selection import config_for
 from proofhire_worker.intelligence.positioning import compute_positioning
 from proofhire_worker.intelligence.provider_factory import get_provider
 from proofhire_worker.intelligence.schemas import (
@@ -180,7 +181,7 @@ async def _run_claim_verification(
             ),
         ],
         schema=ClaimVerificationOutput,
-        model_config=ModelConfig(model="claude-sonnet-5"),
+        model_config=config_for("claim_verify"),
     )
     usages.append(result.usage)
     _log_llm_usage("claim_verify", CLAIM_VERIFY_VERSION, result, job_id_str)
@@ -228,7 +229,7 @@ async def _generate_resume(
             ),
         ],
         schema=ResumeContentOutput,
-        model_config=ModelConfig(model="claude-sonnet-5"),
+        model_config=config_for("resume_write"),
     )
     usages.append(writer_result.usage)
     _log_llm_usage("resume_write", RESUME_WRITE_VERSION, writer_result, job_id_str)
@@ -274,7 +275,7 @@ async def _generate_resume(
                 Message(role="user", content=build_resume_repair_message(failed_texts)),
             ],
             schema=ResumeContentOutput,
-            model_config=ModelConfig(model="claude-sonnet-5"),
+            model_config=config_for("resume_write"),
         )
         usages.append(writer_result.usage)
         _log_llm_usage("resume_write", RESUME_WRITE_VERSION, writer_result, job_id_str)
@@ -303,7 +304,7 @@ async def _generate_cover_letter(
             ),
         ],
         schema=CoverLetterContentOutput,
-        model_config=ModelConfig(model="claude-sonnet-5"),
+        model_config=config_for("cover_letter_write"),
     )
     usages.append(writer_result.usage)
     _log_llm_usage("cover_letter_write", COVER_LETTER_WRITE_VERSION, writer_result, job_id_str)
@@ -346,7 +347,7 @@ async def _generate_cover_letter(
                 Message(role="user", content=build_cover_letter_repair_message(failed_texts)),
             ],
             schema=CoverLetterContentOutput,
-            model_config=ModelConfig(model="claude-sonnet-5"),
+            model_config=config_for("cover_letter_write"),
         )
         usages.append(writer_result.usage)
         _log_llm_usage("cover_letter_write", COVER_LETTER_WRITE_VERSION, writer_result, job_id_str)

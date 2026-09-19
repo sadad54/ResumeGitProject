@@ -1,52 +1,151 @@
-# Continuation from phase 7
+# Build status
 
-This increment starts from phase 6 commit `c38a9ce`, incorporates the subsequent CORS fix and regression test in `c64160c`, and follows the single-builder sequential plan. It is not a declaration that the full V1 is finished.
+Honest state of ProofHire V1 as of 2026-09-20. Supersedes the phase-7
+continuation notes. Every "done" below names the artifact that proves it;
+every gap says what would close it and why it is open.
 
-## Implemented
+The checklist this is measured against is
+`ProofHire_Flagship_AI_FullStack_Checklist.md`; the item-by-item result is in
+`CHECKLIST_STATUS.md` next to this file.
 
-- **Phase 7:** tenant-scoped graph projection; project/skill/architecture/evidence nodes, source links and weighted edges; saved-job requirement overlays; preserved Strong/Partial/Gap/Unknown labels; accessible node/relationship table and coverage matrix; mobile table default; reduced-motion support; responsive shell; command palette with navigation, repository sync and theme toggle; incremental shared UI primitives.
-- **Integration:** reopen captured jobs, poll extraction/coverage separately, suppress stale matches during reanalysis, remove obsolete matches on recomputation, reopen saved documents, select among three single-column resume export styles. Existing standard cover-letter rendering is retained.
-- **Phase 8:** unpacked MV3 extension, selection context menu, page/popup paste fallback, expiring session handoff, existing web-session authentication, idempotent capture endpoint, migration 0007 for page title, saved-job deep link.
-- **Phase 9 foundations:** offline scoring CLI with JSON output and strict missing-measurement gates; F1, retrieval metrics, unsupported-claim/fact/parse-back rates and cost/latency summaries; measured dual-provider budget proposal command; explicitly synthetic smoke fixture.
-- **Phase 10 foundations:** bearer headers instead of URL tokens for SSE; run ownership checks; validation errors omit raw input; accessibility/keyboard/mobile/reduced-motion browser tests; CI definitions for Python/Postgres tests, frontend lint/type/build/browser checks, extension checks, dependency/secret checks and on-master Docker builds; API/web Dockerfiles and deployment notes.
+## Verified working
 
-## Verification performed locally
+**Pipeline.** GitHub OAuth → repository sync (tree, P0/P1/P2 classification,
+vendor/generated/secret exclusion, deterministic tech + ML-infrastructure
+extraction, incremental re-sync with per-path change detection and stale
+marking) → LLM evidence extraction over changed artifacts only → evidence
+graph with provenance → JD requirement extraction → two-stage hybrid
+retrieval (GIN + IVFFlat candidate generation, weighted fusion) → LLM rerank
+→ Strong/Partial/Gap/Unknown coverage → positioning → resume / cover-letter
+writer (conservative + full) → claim verification with the deterministic fact
+guard authoritative for employer/date/degree/metric claims → bounded repair
+→ HTML/PDF render (three templates, A4/Letter, deterministic page breaks) →
+parse-back validation → overflow detection → export. Cooperative
+cancellation between LLM calls.
 
-- 80 Python tests passed: new graph/capture/ownership/CORS tests, evaluation scoring tests and existing fact-guard, matching, secret-scanner and parse-back tests.
-- Five extension service-worker/permission tests passed.
-- Eight Playwright tests passed across desktop and mobile with fixture API responses, including keyboard focus, source inspection, error recovery, reduced motion and automated WCAG A/AA checks on the evidence table page. Screenshots were inspected; a mobile height bug and contrast issues were corrected.
-- TypeScript, ESLint and the production Next.js build passed. Production npm audit reported zero known vulnerabilities at verification time.
-- Three resume templates were rendered by Chromium and their sections, dates, employer and bullet claims were extracted and checked from real PDFs. This is a small regression fixture, not the full ≥99% corpus target.
+**Security.** Bearer JWTs with per-token `jti`; logout revokes both tokens;
+refresh rotation revokes the spent token; revocation fails closed. Account
+deletion and GitHub disconnect. Fernet-encrypted OAuth tokens. Secret
+scanning before persistence and before capture. Rate limiting on every
+endpoint that spends money or third-party quota. CSP + security headers on
+web and API. Prompt inputs from third parties fenced as data, with the
+deterministic guards behind them tested against a model that complied with
+an injection. Dependency, secret and container scanning in CI; both images
+scan at zero CRITICAL/HIGH after moving to multi-stage builds that ship no
+package manager. CSRF posture reviewed and recorded (ADR-0017).
 
-Local relational tests used an ephemeral SQLite database with the production SQLAlchemy models. The host offers Python 3.12; CI is configured for the project's required Python 3.13 and PostgreSQL+pgvector. Hosted CI subsequently passed on commit `4d7fd80`: PostgreSQL migrations, all 138 Python tests on Python 3.13, frontend lint/type/build and eight browser tests, five extension tests, dependency audits and secret scanning. Docker builds run on master and have not yet been verified. No live provider credentials or deployed staging environment were used. Browser tests use synthetic fixtures; they are not evidence of a complete real GitHub-to-PDF journey.
+**Frontend.** Next.js 16 / React 19 / TypeScript, TanStack Query, generated
+typed API client from the OpenAPI document (CI fails on drift), dark/light,
+command palette, responsive, reduced-motion, WCAG-targeted forms and
+non-colour-only status. Evidence Constellation with JD overlay, viewport
+virtualization (`onlyRenderVisibleElements`, confirmed by measurement),
+accessible table equivalent, provenance rail, live export preview through
+the real renderer, before/after diff viewer, overflow warning, optimistic
+stage updates, content-shaped skeletons.
 
-## Remaining acceptance gates (requirements retained)
+**Operations.** Health and readiness (Postgres + Redis) endpoints. Structured
+JSON logs with trace ids. OpenTelemetry spans on every pipeline stage
+(opt-in). Sentry error monitoring (opt-in) with a scrubber that strips locals,
+bodies and credential headers. Dashboard-as-code with backing SQL executed
+against the real schema. Environment separation, backup/restore and rollback
+procedures documented; migrations verified additive-first.
 
-### Phase 7/8 live acceptance
+**Measured.** Lighthouse 100/100/100/100 on five routes (jobs 98 perf),
+475–574 KiB initial JS, 57–60 fps panning at 100–1,000 graph nodes, API p95
+13–46 ms per request locally, retrieval query p50 5 ms at 20k rows after an
+80× fix found by the benchmark. All in `docs/product/metrics/` with the
+scripts that produced them.
 
-- Run graph overlay against the real fixture repository/JD in the user's configured environment, including sync → review → analyze → coverage → provenance.
-- Confirm the exact §11.3 capture/condense/overlay/matrix choreography on real pipeline timing; the current transitions do not delay actions.
-- Load the extension in Chrome and complete right-click capture → analysis → generate → verify → PDF. Service-worker tests do not substitute for installed-extension testing.
-- Finish the full §33 design-system inventory as remaining screens need it. Review screens beyond Evidence still need the final accessibility/polish pass.
-- Automatic page extraction is not implemented; no-selection capture uses paste fallback to preserve the exact minimal permission set.
+**Tests.** 46 API, 124 worker, 18 root (phase 7) Python tests against real
+Postgres and Redis; 9 extension tests driving the real service worker; 8
+Playwright E2E + axe WCAG checks; PDF rendering regression through real
+Chromium; graph FPS and JS payload measurements; 6 visual regression
+comparisons (Windows baselines committed; Linux baselines generated by CI as
+an artifact until committed). CI: lint, typecheck, build, OpenAPI freshness,
+generated-types freshness, all of the above, dependency/secret/container
+scanning.
 
-### Phase 9
+## Bugs found and fixed while verifying (not hidden)
 
-- Curate 100+ distinct real JDs across all seven role families, with genuine human-reviewed requirement/evidence labels and source attribution. No generated labels are represented as human-reviewed.
-- Produce actual OpenAI and Anthropic pipeline runs with independent claim/fact grading and semantic requirement alignment. Publish the benchmark report only after measuring the retained quality targets.
-- Populate accurate nonzero provider cost telemetry, derive and document a dollar spend cap, then implement/enable the full nightly dual-provider runner with pre-call reservations, retry accounting and cap enforcement. The budget command only proposes a cap; no nightly spending job is enabled.
+- Worker registered every real actor on a phantom broker after an import
+  reorder; jobs sat in Redis unconsumed while the process reported healthy.
+  Regression test imports the module fresh and asserts broker registration.
+- Worker tasks reused API connection-pool connections across event loops
+  (`attached to a different loop`). Fixed with a NullPool engine; the API's
+  own engine and Redis client made loop-aware for the same reason.
+- Hybrid retrieval ordered the whole table by the fused score, so the
+  GIN/IVFFlat indexes were never used (1.0× with vs without). Rewritten as
+  two-stage candidate generation; 80× faster at 20k rows.
+- IVFFlat index rebuild exceeds default `maintenance_work_mem` on a populated
+  table; migration 0004 only ever indexed an empty one. Documented with the
+  fix in `infra/deployment/OPERATIONS.md`.
+- `X-Api-Key` slipped past the error-monitoring scrubber's substring match;
+  caught by its test, matcher fixed rather than test weakened.
+- Container images carried 13 CRITICAL/HIGH CVEs, all in base-image
+  toolchains (pip's vendored msgpack, npm's bundled tar/pacote/sigstore),
+  invisible to dependency scanning. Fixed by not shipping the toolchains.
+- First Playwright measurement runs hit the dev server and reported 3.5 MB
+  of JS; discarded and re-run against `next start`.
 
-### Phase 10 / release
+## Open, and why
 
-- Full pipeline OpenTelemetry and operational dashboards, security audit logs, complete CSRF/CSP review, production configuration validation, container scanning and proof of no secrets in logs.
-- Full WCAG 2.2 AA manual and automated review on primary pages, Lighthouse ≥90/95/95 budgets, committed visual regression baselines and CI comparison. Current screenshots are verification artifacts, not a visual-regression gate.
-- Full real-service E2E journey, mobile/tablet coverage, deployment to staging/preview, demo recording and final portfolio report.
-- The phase 6 exporter still uses its existing local filesystem storage. S3-compatible persistence/signed URLs and the before/after tailoring diff viewer remain inherited plan gaps; they are not silently treated as finished here.
+**Requires infrastructure, spend or human labour the builder cannot supply**
+(excluded by decision):
 
-## Run this increment
+- **Production / staging / preview deployment.** Images build and scan clean
+  in CI; nothing is hosted anywhere. `infra/deployment/README.md` and
+  `OPERATIONS.md` describe what to do; the export store is still local disk,
+  so stateless replicas are not yet safe.
+- **Object storage and signed URLs.** Exports are written to the local
+  filesystem. Account deletion therefore does not purge rendered PDFs
+  (ADR-0016 records this).
+- **100+ labelled JD benchmark** and everything downstream of it: extraction
+  F1, Recall@5, nDCG@5, Strong/Partial accuracy, unsupported-claim rate,
+  contradiction rate, verifier catch rate, citation precision. One fixture JD
+  exists. `packages/evals` computes every metric and refuses to fabricate a
+  missing measurement; it has never been run on a real dataset.
+- **Load testing** at 10/50/100/250 users, bottleneck identification under
+  concurrency, queue throughput, failure rate under load. API latency is
+  measured per-request only.
+- **Real provider cost and token telemetry** (cost/repository,
+  cost/application, tokens/run, cache savings, generation p95). The
+  instrumentation exists end to end; the mock provider reports zero cost by
+  construction, so no number is quoted.
+- **Live extension walkthrough** in an installed Chrome. Service-worker tests
+  cover the logic; the human right-click → PDF journey has not been done in
+  this environment (Chrome blocks automation on `chrome://extensions`).
 
-1. Update dependencies from the repository root with `npm ci`. Install all local Python packages together (`packages/contracts`, `packages/prompts`, `packages/evals`, `apps/api[dev]`, `apps/worker[dev]`) and `aiosqlite` for the local new tests.
-2. With the existing database configuration, run `alembic upgrade head` from `apps/api` to apply migration 0007.
-3. Start API, worker and web as usual. Open Evidence for the constellation, Jobs to reopen an analysis, and Documents for saved exports. `Cmd/Ctrl+K` opens the palette.
-4. Follow `apps/extension/README.md` to load the extension. Production origins must be configured in both its manifest and config.
-5. Run `python -m pytest -c pytest.ini ...` from the repo root (the root config supplies monorepo import paths), `node --test apps/extension/tests/*.test.mjs`, and `npm exec --workspace apps/web -- playwright test` after a production build. Install Chromium with Playwright first. A custom local browser executable can be supplied with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+**Not done, could be:**
+
+- Frontend component unit tests (vitest). Attempted; the workspace install
+  did not land and it was dropped by decision. Playwright E2E, axe and visual
+  regression are the frontend coverage.
+- Linux visual-regression baselines. CI generates them as an artifact; they
+  need downloading and committing once to arm the comparison.
+- Full manual WCAG 2.2 AA walkthrough beyond the automated axe checks and the
+  Evidence page's keyboard/focus tests. Lighthouse accessibility is 100 on
+  every route, which is necessary but not the same thing.
+- CSP `'unsafe-inline'` for scripts (Next.js bootstrap). Nonce support would
+  remove it.
+- Retuning IVFFlat `lists` / `probes` once real evidence volumes exist.
+- Hard-delete path for a single evidence item (soft rejection is the
+  default; ADR-0016 notes the one case where that is arguably wrong).
+
+## Run it
+
+1. `npm ci` at the root. Install Python packages together:
+   `pip install -e packages/contracts -e packages/prompts -e packages/evals -e 'apps/api[dev]' -e 'apps/worker[dev]'`.
+2. Postgres 16+ with pgvector and Redis (`infra/docker/docker-compose.yml`).
+   Copy `.env.example` to `.env`; generate the two secrets as described in
+   `infra/deployment/OPERATIONS.md`.
+3. `alembic upgrade head` from `apps/api` (migrations 0001–0008).
+4. API: `uvicorn proofhire_api.main:app` from `apps/api`. Worker:
+   `python -m dramatiq proofhire_worker.tasks` from `apps/worker`. Web:
+   `npm run dev --workspace apps/web`.
+5. Tests: `python -m pytest -c pytest.ini tests/phase7 apps/api/tests apps/worker/tests`
+   from the root with `DATABASE_URL`/`REDIS_URL` set;
+   `node --test apps/extension/tests/*.test.mjs`;
+   `npm exec --workspace apps/web -- playwright test` after `npm run build`.
+6. Measurements: `apps/api/scripts/benchmark_queries.py`,
+   `apps/web/tests/graph-performance.spec.ts`, `apps/web/tests/js-payload.spec.ts`,
+   `npx lighthouse` against `next start`.
