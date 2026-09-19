@@ -1,0 +1,42 @@
+{
+  "measured_at": "2026-09-19T19:47:44.283Z",
+  "note": "Uncompressed bytes of /_next/static JS fetched on a cold navigation to each route, production build.",
+  "results": [
+    {
+      "route": "/",
+      "script_count": 11,
+      "js_bytes_uncompressed": 577467,
+      "js_kib": 564
+    },
+    {
+      "route": "/evidence",
+      "script_count": 7,
+      "js_bytes_uncompressed": 486061,
+      "js_kib": 475
+    },
+    {
+      "route": "/jobs",
+      "script_count": 12,
+      "js_bytes_uncompressed": 587748,
+      "js_kib": 574
+    },
+    {
+      "route": "/documents",
+      "script_count": 11,
+      "js_bytes_uncompressed": 577467,
+      "js_kib": 564
+    },
+    {
+      "route": "/applications",
+      "script_count": 11,
+      "js_bytes_uncompressed": 577467,
+      "js_kib": 564
+    },
+    {
+      "route": "/settings",
+      "script_count": 11,
+      "js_bytes_uncompressed": 577467,
+      "js_kib": 564
+    }
+  ]
+}

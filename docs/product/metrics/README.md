@@ -54,3 +54,55 @@ IVFFlat is built with `lists = 100`; pgvector's guidance is `rows / 1000`
 lists, so at 20k rows this is over-partitioned and probes only 1 list by
 default. That favours latency and costs recall on random vectors. Retuning
 `lists` and `ivfflat.probes` is a quality question for the labelled benchmark.
+
+---
+
+# Track D: measured metrics
+
+Every number below is read from a committed JSON file in this directory, produced by a script or test in the repo. Machine: Windows 11 / WSL2, single dev laptop; not a production environment.
+
+## Frontend (`lighthouse.json`, `js-payload.json`, `graph-fps.json`)
+
+Lighthouse 13, desktop preset, production build via `next start`. INP is a field metric and cannot come from a lab run; TBT is the lab proxy.
+
+| Route | Perf | A11y | Best practices | SEO | LCP | TBT | CLS | Initial JS (uncompressed) |
+|---|---|---|---|---|---|---|---|---|
+| `/applications` | 100 | 100 | 100 | 100 | 492 ms | 0 ms | 0 | 564 KiB / 11 scripts |
+| `/documents` | 100 | 100 | 100 | 100 | 411 ms | 7 ms | 0 | 564 KiB / 11 scripts |
+| `/evidence` | 100 | 100 | 100 | 100 | 518 ms | 0 ms | 0.025 | 475 KiB / 7 scripts |
+| `/` | 100 | 100 | 100 | 100 | 518 ms | 0 ms | 0 | 564 KiB / 11 scripts |
+| `/jobs` | 98 | 100 | 100 | 100 | 756 ms | 115 ms | 0 | 574 KiB / 12 scripts |
+| `/settings` | 100 | 100 | 100 | 100 | 407 ms | 0 ms | 0 | 564 KiB / 11 scripts |
+
+PRD targets (Performance ≥ 90, Accessibility ≥ 95, Best Practices ≥ 95) are met on every route.
+
+Graph FPS: synthetic graph through the real React Flow canvas, rAF frames counted during ~2 s of scripted wheel panning (`tests/graph-performance.spec.ts`). `rendered` is the number of node elements in the DOM, which stays ~39 at every size because the canvas uses React Flow's `onlyRenderVisibleElements` viewport virtualization — that is the checklist's "virtualized rendering" item, confirmed by measurement rather than by reading the prop.
+
+| Graph nodes | Edges | DOM nodes rendered | Time to first node | Pan FPS |
+|---|---|---|---|---|
+| 100 | 197 | 39 | 810 ms | 60 |
+| 500 | 997 | 39 | 941 ms | 60 |
+| 1,000 | 1,997 | 39 | 1415 ms | 57 |
+
+## Systems (`api-latency.json`, `query-benchmark.json`)
+
+API latency: 200 sequential requests per route from one warm client to the local uvicorn (1 worker). This is per-request cost, **not** a concurrency test — load testing at 10/50/100/250 users is out of scope and unmeasured. Authenticated routes include the Redis revocation lookup.
+
+| Route | p50 | p95 | p99 |
+|---|---|---|---|
+| `/ready` | 5.56 ms | 12.97 ms | 15.56 ms |
+| `/api/v1/auth/me` | 7.34 ms | 17.02 ms | 19.33 ms |
+| `/api/v1/jobs` | 8.44 ms | 19.06 ms | 23.54 ms |
+| `/api/v1/documents` | 8.2 ms | 17.11 ms | 19.71 ms |
+| `/api/v1/evidence` | 11.13 ms | 46.2 ms | 120.64 ms |
+| `/api/v1/evidence/graph` | 10.91 ms | 23.64 ms | 33.74 ms |
+
+Retrieval query at 20k evidence rows: see the top of this file (p50 5 ms vector+lexical after the rewrite).
+
+Repositories / source files processed (dev database, real GitHub sync of one repository): 1 repository, 120 source artifacts. Evidence nodes generated: **0** — extraction never completed on this database before the worker bug fixed earlier in this session, and has not been re-run against a paid provider since. Incremental-sync reduction: instrumented (`extraction_skipped_no_changes`, see `infra/observability`) but no re-sync has run to produce a number.
+
+## Not measured, and why
+
+- **Generation p95, tokens/application, cost/application, cost/repository, cache savings**: require real provider runs. The instrumentation exists (`generation_runs` columns, `llm_call_completed` events, `infra/observability/queries.sql`) and the mock provider reports zero cost by construction, so quoting it would be fabrication.
+- **Concurrent users, failure rate under load, queue throughput**: load testing is out of scope by the user's decision.
+- **All AI-quality metrics** (extraction F1, Recall@5, nDCG@5, unsupported-claim rate, verifier catch rate): require the labelled JD benchmark, out of scope. `packages/evals` can compute them once a dataset exists.

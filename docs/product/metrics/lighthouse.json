@@ -1,0 +1,79 @@
+{
+  "measured_at": "2026-09-19T19:53:16.582623+00:00",
+  "lighthouse_version": "12.8.2",
+  "preset": "desktop, headless Chrome, production build served by `next start` on localhost",
+  "results": [
+    {
+      "route": "applications",
+      "url": "http://127.0.0.1:3000/applications",
+      "performance": 100,
+      "accessibility": 100,
+      "best_practices": 100,
+      "seo": 100,
+      "lcp_ms": 492,
+      "tbt_ms": 0,
+      "cls": 0,
+      "inp_note": "Lighthouse lab runs report TBT; INP is a field metric and needs real user interaction data."
+    },
+    {
+      "route": "documents",
+      "url": "http://127.0.0.1:3000/documents",
+      "performance": 100,
+      "accessibility": 100,
+      "best_practices": 100,
+      "seo": 100,
+      "lcp_ms": 411,
+      "tbt_ms": 7,
+      "cls": 0,
+      "inp_note": "Lighthouse lab runs report TBT; INP is a field metric and needs real user interaction data."
+    },
+    {
+      "route": "evidence",
+      "url": "http://127.0.0.1:3000/evidence",
+      "performance": 100,
+      "accessibility": 100,
+      "best_practices": 100,
+      "seo": 100,
+      "lcp_ms": 518,
+      "tbt_ms": 0,
+      "cls": 0.025,
+      "inp_note": "Lighthouse lab runs report TBT; INP is a field metric and needs real user interaction data."
+    },
+    {
+      "route": "home",
+      "url": "http://127.0.0.1:3000/",
+      "performance": 100,
+      "accessibility": 100,
+      "best_practices": 100,
+      "seo": 100,
+      "lcp_ms": 518,
+      "tbt_ms": 0,
+      "cls": 0,
+      "inp_note": "Lighthouse lab runs report TBT; INP is a field metric and needs real user interaction data."
+    },
+    {
+      "route": "jobs",
+      "url": "http://127.0.0.1:3000/jobs",
+      "performance": 98,
+      "accessibility": 100,
+      "best_practices": 100,
+      "seo": 100,
+      "lcp_ms": 756,
+      "tbt_ms": 115,
+      "cls": 0,
+      "inp_note": "Lighthouse lab runs report TBT; INP is a field metric and needs real user interaction data."
+    },
+    {
+      "route": "settings",
+      "url": "http://127.0.0.1:3000/settings",
+      "performance": 100,
+      "accessibility": 100,
+      "best_practices": 100,
+      "seo": 100,
+      "lcp_ms": 407,
+      "tbt_ms": 0,
+      "cls": 0,
+      "inp_note": "Lighthouse lab runs report TBT; INP is a field metric and needs real user interaction data."
+    }
+  ]
+}

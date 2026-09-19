@@ -1,0 +1,38 @@
+{
+  "measured_at": "2026-09-19T19:48:15.592Z",
+  "note": "Synthetic graph; pan_fps = rAF frames during ~2s of scripted wheel panning.",
+  "platform": "win32 x64",
+  "node": "v22.14.0",
+  "results": [
+    {
+      "nodes": 100,
+      "edges": 197,
+      "rendered_nodes": 39,
+      "time_to_first_node_ms": 810,
+      "pan_fps": 60,
+      "frames": 273,
+      "elapsed_ms": 4522,
+      "browser": "chromium"
+    },
+    {
+      "nodes": 500,
+      "edges": 997,
+      "rendered_nodes": 39,
+      "time_to_first_node_ms": 941,
+      "pan_fps": 60,
+      "frames": 387,
+      "elapsed_ms": 6479,
+      "browser": "chromium"
+    },
+    {
+      "nodes": 1000,
+      "edges": 1997,
+      "rendered_nodes": 39,
+      "time_to_first_node_ms": 1415,
+      "pan_fps": 57,
+      "frames": 1123,
+      "elapsed_ms": 19660,
+      "browser": "chromium"
+    }
+  ]
+}

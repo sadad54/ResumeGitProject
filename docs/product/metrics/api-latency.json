@@ -1,0 +1,55 @@
+{
+  "measured_at": "2026-09-19T19:48:52.378071+00:00",
+  "note": "Sequential single-client requests to the local API (uvicorn, 1 worker) with a warm connection; not a concurrency/load test. Auth routes include the Redis revocation check.",
+  "environment": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+  "results": [
+    {
+      "route": "/ready",
+      "runs": 200,
+      "p50_ms": 5.56,
+      "p95_ms": 12.97,
+      "p99_ms": 15.56,
+      "max_ms": 19.71
+    },
+    {
+      "route": "/api/v1/auth/me",
+      "runs": 200,
+      "p50_ms": 7.34,
+      "p95_ms": 17.02,
+      "p99_ms": 19.33,
+      "max_ms": 27.86
+    },
+    {
+      "route": "/api/v1/jobs",
+      "runs": 200,
+      "p50_ms": 8.44,
+      "p95_ms": 19.06,
+      "p99_ms": 23.54,
+      "max_ms": 40.5
+    },
+    {
+      "route": "/api/v1/documents",
+      "runs": 200,
+      "p50_ms": 8.2,
+      "p95_ms": 17.11,
+      "p99_ms": 19.71,
+      "max_ms": 20.37
+    },
+    {
+      "route": "/api/v1/evidence",
+      "runs": 200,
+      "p50_ms": 11.13,
+      "p95_ms": 46.2,
+      "p99_ms": 120.64,
+      "max_ms": 158.99
+    },
+    {
+      "route": "/api/v1/evidence/graph",
+      "runs": 200,
+      "p50_ms": 10.91,
+      "p95_ms": 23.64,
+      "p99_ms": 33.74,
+      "max_ms": 48.39
+    }
+  ]
+}
