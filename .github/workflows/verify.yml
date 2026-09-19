@@ -37,6 +37,9 @@ jobs:
       - run: pip install -e packages/contracts -e packages/prompts -e packages/evals -e 'apps/api[dev]' -e 'apps/worker[dev]' aiosqlite
       - run: python -m playwright install --with-deps chromium
       - run: python -m ruff check --select E9,F63,F7,F82 apps packages tests
+      - name: OpenAPI document is current
+        run: python scripts/export_openapi.py ../../docs/api/openapi.json && git diff --exit-code -- ../../docs/api/openapi.json
+        working-directory: apps/api
       - run: python -m alembic -c alembic.ini upgrade head
         working-directory: apps/api
       - run: python -m pytest -c pytest.ini tests/phase7 apps/api/tests apps/worker/tests packages/evals/tests
@@ -58,6 +61,8 @@ jobs:
       - run: npm ci
       - run: npm run lint --workspace apps/web
       - run: npm run typecheck --workspace apps/web
+      - name: Generated API types match the OpenAPI document
+        run: npm run check:api-types --workspace apps/web
       - run: npm run build --workspace apps/web
       - run: node --test apps/extension/tests/*.test.mjs
       - run: npm exec --workspace apps/web -- playwright install --with-deps chromium

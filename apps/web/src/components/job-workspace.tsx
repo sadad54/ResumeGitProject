@@ -3,15 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetch, getAccessToken } from "@/lib/api";
+import { api, type components } from "@/lib/api-client";
 import { EvidenceConstellation } from "./evidence-constellation";
 import { Button, EmptyState } from "@proofhire/design-system/ui";
 
-type Job = {
-  id: string;
-  company: string | null;
-  role: string | null;
-  status: string;
-};
+// Generated from the API's OpenAPI document — a backend change to JobPublic
+// fails `npm run typecheck` here rather than surfacing as undefined at runtime.
+type Job = components["schemas"]["JobPublic"];
 
 export function JobWorkspace({ initialJobId = "" }: { initialJobId?: string }) {
   const [jdText, setJdText] = useState("");
@@ -25,8 +23,9 @@ export function JobWorkspace({ initialJobId = "" }: { initialJobId?: string }) {
   useEffect(() => {
     setSignedIn(!!getAccessToken());
     if (getAccessToken())
-      apiFetch<Job[]>("/api/v1/jobs")
-        .then(setJobs)
+      api
+        .GET("/api/v1/jobs")
+        .then(({ data }) => setJobs(data ?? []))
         .catch(() => setError("Could not load saved jobs."));
   }, [revision]);
   useEffect(() => setSelectedId(initialJobId), [initialJobId]);
@@ -39,10 +38,11 @@ export function JobWorkspace({ initialJobId = "" }: { initialJobId?: string }) {
     setError("");
     async function poll() {
       try {
-        const current = await apiFetch<Job>(
-          `/api/v1/jobs/${encodeURIComponent(selectedId)}`,
-          { signal: controller.signal },
-        );
+        const { data: current } = await api.GET("/api/v1/jobs/{job_id}", {
+          params: { path: { job_id: selectedId } },
+          signal: controller.signal,
+        });
+        if (!current) throw new Error("Job not found.");
         setJob(current);
         if (["analyzing", "matching", "analyzed"].includes(current.status)) {
           if (++attempts < 90) timer = setTimeout(poll, 2000);

@@ -1,0 +1,3890 @@
+{
+  "components": {
+    "schemas": {
+      "AnalyzeResponse": {
+        "properties": {
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "status": {
+            "default": "queued",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "AnalyzeResponse",
+        "type": "object"
+      },
+      "ApplicationCreateRequest": {
+        "properties": {
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "ApplicationCreateRequest",
+        "type": "object"
+      },
+      "ApplicationPatch": {
+        "properties": {
+          "stage": {
+            "$ref": "#/components/schemas/ApplicationStage"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "title": "ApplicationPatch",
+        "type": "object"
+      },
+      "ApplicationPublic": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/ApplicationStage"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "stage",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ApplicationPublic",
+        "type": "object"
+      },
+      "ApplicationStage": {
+        "enum": [
+          "saved",
+          "analyzing",
+          "ready",
+          "applied",
+          "screen",
+          "interview",
+          "offer",
+          "rejected",
+          "archived"
+        ],
+        "title": "ApplicationStage",
+        "type": "string"
+      },
+      "Body_upload_resume_api_v1_profile_resume_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_resume_api_v1_profile_resume_post",
+        "type": "object"
+      },
+      "ClaimVerificationStatus": {
+        "enum": [
+          "supported",
+          "partially_supported",
+          "unsupported",
+          "contradictory"
+        ],
+        "title": "ClaimVerificationStatus",
+        "type": "string"
+      },
+      "ConnectResponse": {
+        "properties": {
+          "authorize_url": {
+            "title": "Authorize Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorize_url"
+        ],
+        "title": "ConnectResponse",
+        "type": "object"
+      },
+      "CoverageRow": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/RequirementCategory"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Id"
+          },
+          "evidence_repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Repository"
+          },
+          "evidence_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Title"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "importance": {
+            "title": "Importance",
+            "type": "number"
+          },
+          "match_label": {
+            "$ref": "#/components/schemas/MatchLabel"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "requirement_id": {
+            "format": "uuid",
+            "title": "Requirement Id",
+            "type": "string"
+          },
+          "requirement_text": {
+            "title": "Requirement Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requirement_id",
+          "requirement_text",
+          "category",
+          "required",
+          "importance",
+          "match_label",
+          "evidence_id",
+          "evidence_title",
+          "evidence_repository",
+          "confidence",
+          "explanation",
+          "action"
+        ],
+        "title": "CoverageRow",
+        "type": "object"
+      },
+      "DocumentType": {
+        "enum": [
+          "resume",
+          "cover_letter"
+        ],
+        "title": "DocumentType",
+        "type": "string"
+      },
+      "EvidenceDetail": {
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "evidence_type": {
+            "$ref": "#/components/schemas/EvidenceType"
+          },
+          "extraction_method": {
+            "title": "Extraction Method",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "normalized_claim": {
+            "title": "Normalized Claim",
+            "type": "string"
+          },
+          "repository_id": {
+            "format": "uuid",
+            "title": "Repository Id",
+            "type": "string"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSourcePublic"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EvidenceStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "repository_id",
+          "evidence_type",
+          "title",
+          "normalized_claim",
+          "description",
+          "confidence",
+          "extraction_method",
+          "status",
+          "created_at",
+          "sources",
+          "skills"
+        ],
+        "title": "EvidenceDetail",
+        "type": "object"
+      },
+      "EvidenceGraph": {
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "evidence_limit": {
+            "title": "Evidence Limit",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "job_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Status"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "nodes",
+          "edges",
+          "evidence_limit"
+        ],
+        "title": "EvidenceGraph",
+        "type": "object"
+      },
+      "EvidencePatch": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/EvidenceStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "EvidencePatch",
+        "type": "object"
+      },
+      "EvidencePublic": {
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "evidence_type": {
+            "$ref": "#/components/schemas/EvidenceType"
+          },
+          "extraction_method": {
+            "title": "Extraction Method",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "normalized_claim": {
+            "title": "Normalized Claim",
+            "type": "string"
+          },
+          "repository_id": {
+            "format": "uuid",
+            "title": "Repository Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EvidenceStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "repository_id",
+          "evidence_type",
+          "title",
+          "normalized_claim",
+          "description",
+          "confidence",
+          "extraction_method",
+          "status",
+          "created_at"
+        ],
+        "title": "EvidencePublic",
+        "type": "object"
+      },
+      "EvidenceSearchHit": {
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "evidence_type": {
+            "$ref": "#/components/schemas/EvidenceType"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "normalized_claim": {
+            "title": "Normalized Claim",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "normalized_claim",
+          "evidence_type",
+          "confidence",
+          "score"
+        ],
+        "title": "EvidenceSearchHit",
+        "type": "object"
+      },
+      "EvidenceSearchRequest": {
+        "properties": {
+          "limit": {
+            "default": 10,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "EvidenceSearchRequest",
+        "type": "object"
+      },
+      "EvidenceSourcePublic": {
+        "properties": {
+          "commit_sha": {
+            "title": "Commit Sha",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "line_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line End"
+          },
+          "line_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Start"
+          },
+          "locator": {
+            "title": "Locator",
+            "type": "string"
+          },
+          "relevance": {
+            "title": "Relevance",
+            "type": "number"
+          },
+          "source_artifact_id": {
+            "format": "uuid",
+            "title": "Source Artifact Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_artifact_id",
+          "locator",
+          "line_start",
+          "line_end",
+          "commit_sha",
+          "relevance"
+        ],
+        "title": "EvidenceSourcePublic",
+        "type": "object"
+      },
+      "EvidenceStatus": {
+        "enum": [
+          "candidate",
+          "confirmed",
+          "rejected",
+          "private",
+          "stale"
+        ],
+        "title": "EvidenceStatus",
+        "type": "string"
+      },
+      "EvidenceType": {
+        "enum": [
+          "skill_usage",
+          "architecture",
+          "implementation",
+          "integration",
+          "deployment",
+          "testing",
+          "ml_model",
+          "data_pipeline",
+          "performance_metric",
+          "ownership",
+          "contribution",
+          "feature"
+        ],
+        "title": "EvidenceType",
+        "type": "string"
+      },
+      "ExportResponse": {
+        "properties": {
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "overflowed": {
+            "default": false,
+            "title": "Overflowed",
+            "type": "boolean"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "pdf_available": {
+            "title": "Pdf Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document_id",
+          "pdf_available"
+        ],
+        "title": "ExportResponse",
+        "type": "object"
+      },
+      "GenerateRequest": {
+        "properties": {
+          "document_type": {
+            "$ref": "#/components/schemas/DocumentType",
+            "default": "resume"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/TailoringMode",
+            "default": "conservative"
+          }
+        },
+        "title": "GenerateRequest",
+        "type": "object"
+      },
+      "GenerateResponse": {
+        "properties": {
+          "generation_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Run Id"
+          },
+          "status": {
+            "default": "queued",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "GenerateResponse",
+        "type": "object"
+      },
+      "GeneratedClaimPublic": {
+        "properties": {
+          "claim_text": {
+            "title": "Claim Text",
+            "type": "string"
+          },
+          "claim_type": {
+            "title": "Claim Type",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Id"
+          },
+          "evidence_repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Repository"
+          },
+          "evidence_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Title"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "source_locator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Locator"
+          },
+          "verification_status": {
+            "$ref": "#/components/schemas/ClaimVerificationStatus"
+          }
+        },
+        "required": [
+          "id",
+          "claim_text",
+          "claim_type",
+          "verification_status",
+          "confidence"
+        ],
+        "title": "GeneratedClaimPublic",
+        "type": "object"
+      },
+      "GeneratedDocumentPublic": {
+        "properties": {
+          "content_json": {
+            "additionalProperties": true,
+            "title": "Content Json",
+            "type": "object"
+          },
+          "generation_run_id": {
+            "format": "uuid",
+            "title": "Generation Run Id",
+            "type": "string"
+          },
+          "html_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Ref"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "pdf_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Ref"
+          },
+          "plaintext_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plaintext Ref"
+          },
+          "template_id": {
+            "title": "Template Id",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "generation_run_id",
+          "type",
+          "template_id",
+          "version",
+          "content_json"
+        ],
+        "title": "GeneratedDocumentPublic",
+        "type": "object"
+      },
+      "GenerationRunPublic": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "estimated_cost": {
+            "title": "Estimated Cost",
+            "type": "number"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "number"
+          },
+          "pipeline_version": {
+            "title": "Pipeline Version",
+            "type": "string"
+          },
+          "prompt_versions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Prompt Versions",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GenerationRunStatus"
+          },
+          "token_usage": {
+            "additionalProperties": true,
+            "title": "Token Usage",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "pipeline_version",
+          "status",
+          "prompt_versions",
+          "token_usage",
+          "latency_ms",
+          "estimated_cost",
+          "created_at"
+        ],
+        "title": "GenerationRunPublic",
+        "type": "object"
+      },
+      "GenerationRunStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "title": "GenerationRunStatus",
+        "type": "string"
+      },
+      "GraphEdge": {
+        "properties": {
+          "explanation": {
+            "default": "",
+            "title": "Explanation",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "contains",
+              "demonstrates",
+              "matches"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchLabel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "target",
+          "kind",
+          "weight"
+        ],
+        "title": "GraphEdge",
+        "type": "object"
+      },
+      "GraphNode": {
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "project",
+              "skill",
+              "architecture",
+              "evidence",
+              "requirement"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "repository_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Id"
+          },
+          "required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/GraphSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label"
+        ],
+        "title": "GraphNode",
+        "type": "object"
+      },
+      "GraphSource": {
+        "properties": {
+          "commit_sha": {
+            "title": "Commit Sha",
+            "type": "string"
+          },
+          "line_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line End"
+          },
+          "line_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Start"
+          },
+          "locator": {
+            "title": "Locator",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "locator",
+          "url",
+          "commit_sha"
+        ],
+        "title": "GraphSource",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JobCaptureRequest": {
+        "properties": {
+          "capture_id": {
+            "format": "uuid",
+            "title": "Capture Id",
+            "type": "string"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "page_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Url"
+          },
+          "selected_text": {
+            "maxLength": 60000,
+            "minLength": 40,
+            "title": "Selected Text",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "selected_text"
+        ],
+        "title": "JobCaptureRequest",
+        "type": "object"
+      },
+      "JobCreateRequest": {
+        "properties": {
+          "source_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Text"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "title": "JobCreateRequest",
+        "type": "object"
+      },
+      "JobPublic": {
+        "properties": {
+          "captured_at": {
+            "format": "date-time",
+            "title": "Captured At",
+            "type": "string"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "seniority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seniority"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_url",
+          "company",
+          "role",
+          "seniority",
+          "location",
+          "captured_at",
+          "status"
+        ],
+        "title": "JobPublic",
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "LogoutRequest": {
+        "properties": {
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          }
+        },
+        "title": "LogoutRequest",
+        "type": "object"
+      },
+      "MatchLabel": {
+        "enum": [
+          "strong",
+          "partial",
+          "gap",
+          "unknown"
+        ],
+        "title": "MatchLabel",
+        "type": "string"
+      },
+      "PositioningResponse": {
+        "properties": {
+          "gaps_to_avoid": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps To Avoid",
+            "type": "array"
+          },
+          "project_priority": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Project Priority",
+            "type": "array"
+          },
+          "skills_priority": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills Priority",
+            "type": "array"
+          },
+          "target_identity": {
+            "title": "Target Identity",
+            "type": "string"
+          },
+          "themes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Themes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "target_identity",
+          "themes",
+          "project_priority",
+          "skills_priority",
+          "gaps_to_avoid"
+        ],
+        "title": "PositioningResponse",
+        "type": "object"
+      },
+      "ProfileFactPatch": {
+        "properties": {
+          "confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed"
+          },
+          "value_json": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Json"
+          }
+        },
+        "title": "ProfileFactPatch",
+        "type": "object"
+      },
+      "ProfileFactPublic": {
+        "properties": {
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "immutable": {
+            "title": "Immutable",
+            "type": "boolean"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ProfileFactType"
+          },
+          "value_json": {
+            "additionalProperties": true,
+            "title": "Value Json",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "value_json",
+          "source",
+          "immutable",
+          "confirmed"
+        ],
+        "title": "ProfileFactPublic",
+        "type": "object"
+      },
+      "ProfileFactType": {
+        "enum": [
+          "employment",
+          "education",
+          "award",
+          "certification",
+          "contact",
+          "summary_fact"
+        ],
+        "title": "ProfileFactType",
+        "type": "string"
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "type": "object"
+      },
+      "RepositoryPatch": {
+        "properties": {
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "selected"
+        ],
+        "title": "RepositoryPatch",
+        "type": "object"
+      },
+      "RepositoryPublic": {
+        "properties": {
+          "default_branch": {
+            "title": "Default Branch",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "language_summary": {
+            "additionalProperties": true,
+            "title": "Language Summary",
+            "type": "object"
+          },
+          "last_analyzed_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Analyzed Sha"
+          },
+          "last_commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Commit Sha"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "stars": {
+            "title": "Stars",
+            "type": "integer"
+          },
+          "sync_status": {
+            "$ref": "#/components/schemas/SyncStatus"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "owner",
+          "name",
+          "url",
+          "visibility",
+          "default_branch",
+          "language_summary",
+          "stars",
+          "selected",
+          "last_commit_sha",
+          "last_analyzed_sha",
+          "sync_status"
+        ],
+        "title": "RepositoryPublic",
+        "type": "object"
+      },
+      "RequirementCategory": {
+        "enum": [
+          "skill",
+          "experience",
+          "responsibility",
+          "domain",
+          "education",
+          "tooling",
+          "soft_skill",
+          "seniority"
+        ],
+        "title": "RequirementCategory",
+        "type": "string"
+      },
+      "RequirementPublic": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/RequirementCategory"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "importance": {
+            "title": "Importance",
+            "type": "number"
+          },
+          "normalized": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Normalized",
+            "type": "array"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "text",
+          "normalized",
+          "importance",
+          "required",
+          "confidence"
+        ],
+        "title": "RequirementPublic",
+        "type": "object"
+      },
+      "SignupRequest": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "SignupRequest",
+        "type": "object"
+      },
+      "SyncStatus": {
+        "enum": [
+          "idle",
+          "queued",
+          "syncing",
+          "completed",
+          "failed"
+        ],
+        "title": "SyncStatus",
+        "type": "string"
+      },
+      "SyncStatusResponse": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "repository_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Repository Ids",
+            "type": "array"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SyncStatus"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "repository_ids",
+          "error"
+        ],
+        "title": "SyncStatusResponse",
+        "type": "object"
+      },
+      "SyncTriggerRequest": {
+        "properties": {
+          "repository_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Repository Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "repository_ids"
+        ],
+        "title": "SyncTriggerRequest",
+        "type": "object"
+      },
+      "SyncTriggerResponse": {
+        "properties": {
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SyncStatus"
+          }
+        },
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "SyncTriggerResponse",
+        "type": "object"
+      },
+      "TailoringMode": {
+        "enum": [
+          "conservative",
+          "full"
+        ],
+        "title": "TailoringMode",
+        "type": "string"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token"
+        ],
+        "title": "TokenResponse",
+        "type": "object"
+      },
+      "UserPublic": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "display_name",
+          "created_at"
+        ],
+        "title": "UserPublic",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Evidence-grounded AI career agent \u2014 API",
+    "title": "ProofHire API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/applications": {
+      "get": {
+        "operationId": "list_applications_api_v1_applications_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApplicationPublic"
+                  },
+                  "title": "Response List Applications Api V1 Applications Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Applications",
+        "tags": [
+          "applications"
+        ]
+      },
+      "post": {
+        "operationId": "create_application_api_v1_applications_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Application",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}": {
+      "patch": {
+        "operationId": "patch_application_api_v1_applications__application_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Application",
+        "tags": [
+          "applications"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "Revoke this session's tokens.\n\nBoth tokens are revoked: dropping only the access token would leave the\nrefresh token able to mint a fresh one, which is not a logout.",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "delete": {
+        "description": "Permanently delete the account and everything owned by it.\n\nHard delete, by design (see docs/adr/0016-deletion-policy.md): this is the\nuser's own data-erasure path, so leaving soft-deleted rows behind would\ndefeat the point. Every owned table cascades from `users`, including the\nencrypted GitHub token.",
+        "operationId": "delete_account_api_v1_auth_me_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Account",
+        "tags": [
+          "auth"
+        ]
+      },
+      "get": {
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/signup": {
+      "post": {
+        "operationId": "signup_api_v1_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Signup",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/documents": {
+      "get": {
+        "operationId": "list_documents_api_v1_documents_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GeneratedDocumentPublic"
+                  },
+                  "title": "Response List Documents Api V1 Documents Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Documents",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}": {
+      "get": {
+        "operationId": "get_document_api_v1_documents__document_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedDocumentPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Document",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/claims": {
+      "get": {
+        "description": "Backs the resume workspace's provenance rail (PRD \u00a711.4): click a\nbullet, see exactly which repository/file it traces back to.",
+        "operationId": "get_document_claims_api_v1_documents__document_id__claims_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GeneratedClaimPublic"
+                  },
+                  "title": "Response Get Document Claims Api V1 Documents  Document Id  Claims Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Document Claims",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/export": {
+      "post": {
+        "description": "Synchronous (not queued): one bounded Playwright render + parse-back\nvalidation cycle, same rationale as resume upload and positioning.",
+        "operationId": "export_document_endpoint_api_v1_documents__document_id__export_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "template",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ats_minimal",
+                    "technical_dense",
+                    "modern_editorial"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": "Letter",
+              "enum": [
+                "Letter",
+                "A4"
+              ],
+              "title": "Page Size",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Document Endpoint",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/pdf": {
+      "get": {
+        "operationId": "download_document_pdf_api_v1_documents__document_id__pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Document Pdf",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/events/runs/{run_id}": {
+      "get": {
+        "operationId": "stream_run_events_api_v1_events_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream Run Events",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/api/v1/evidence": {
+      "get": {
+        "operationId": "list_evidence_api_v1_evidence_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "repository_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Repository Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "evidence_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EvidenceType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Evidence Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EvidenceStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EvidencePublic"
+                  },
+                  "title": "Response List Evidence Api V1 Evidence Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Evidence",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/api/v1/evidence/graph": {
+      "get": {
+        "operationId": "get_evidence_graph_api_v1_evidence_graph_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "job_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Job Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "repository_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Repository Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceGraph"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Evidence Graph",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/api/v1/evidence/search": {
+      "post": {
+        "operationId": "search_evidence_api_v1_evidence_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvidenceSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EvidenceSearchHit"
+                  },
+                  "title": "Response Search Evidence Api V1 Evidence Search Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Evidence",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/api/v1/evidence/{evidence_id}": {
+      "get": {
+        "operationId": "get_evidence_api_v1_evidence__evidence_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "evidence_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Evidence Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Evidence",
+        "tags": [
+          "evidence"
+        ]
+      },
+      "patch": {
+        "description": "Approve/reject/mark-private (PRD \u00a79.1 Evidence Review). Only status is\nuser-editable in V1 \u2014 editing claim text is deferred; a user who disagrees\nwith a claim rejects it rather than rewriting AI-generated text, which would\nreintroduce the provenance problem ProofHire exists to solve.",
+        "operationId": "patch_evidence_api_v1_evidence__evidence_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "evidence_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Evidence Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvidencePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidencePublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Evidence",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/api/v1/generation-runs/{run_id}": {
+      "get": {
+        "operationId": "get_generation_run_api_v1_generation_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationRunPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Generation Run",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/github/callback": {
+      "get": {
+        "operationId": "callback_api_v1_github_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Callback",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/v1/github/connect": {
+      "post": {
+        "operationId": "connect_api_v1_github_connect_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Connect",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/v1/github/connection": {
+      "delete": {
+        "description": "Disconnect GitHub: drop the stored OAuth token and the repositories it\ngave access to.\n\nEvidence already extracted is deliberately kept \u2014 it belongs to the user's\nprofile, not to the connection, and silently destroying a reviewed evidence\ngraph because a token was disconnected would be a nasty surprise. Use\naccount deletion to erase everything.",
+        "operationId": "disconnect_api_v1_github_connection_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Disconnect",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/v1/github/repositories": {
+      "get": {
+        "description": "Lists repositories already known to ProofHire. Call POST /github/repositories/refresh\nfirst (or after connecting) to pull the latest list from GitHub.",
+        "operationId": "list_repositories_api_v1_github_repositories_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RepositoryPublic"
+                  },
+                  "title": "Response List Repositories Api V1 Github Repositories Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Repositories",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/v1/github/repositories/refresh": {
+      "post": {
+        "description": "Pulls the user's repository list from GitHub and upserts local rows.\nDoes not fetch file content \u2014 that happens in POST /github/sync.",
+        "operationId": "refresh_repositories_api_v1_github_repositories_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RepositoryPublic"
+                  },
+                  "title": "Response Refresh Repositories Api V1 Github Repositories Refresh Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Refresh Repositories",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/v1/github/repositories/{repository_id}": {
+      "patch": {
+        "operationId": "patch_repository_api_v1_github_repositories__repository_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositoryPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Repository",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/v1/github/sync": {
+      "post": {
+        "operationId": "trigger_sync_api_v1_github_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncTriggerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncTriggerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger Sync",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/v1/github/sync/{run_id}": {
+      "get": {
+        "operationId": "get_sync_status_api_v1_github_sync__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Sync Status",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "operationId": "list_jobs_api_v1_jobs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobPublic"
+                  },
+                  "title": "Response List Jobs Api V1 Jobs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Jobs",
+        "tags": [
+          "jobs"
+        ]
+      },
+      "post": {
+        "operationId": "create_job_api_v1_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/capture": {
+      "post": {
+        "operationId": "capture_job_api_v1_jobs_capture_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCaptureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Capture Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/analyze": {
+      "post": {
+        "operationId": "analyze_job_endpoint_api_v1_jobs__job_id__analyze_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Analyze Job Endpoint",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/coverage": {
+      "get": {
+        "description": "Evidence Coverage Matrix (PRD \u00a718). A requirement with no EvidenceMatch\nrow is an implicit Gap \u2014 the coverage engine never even retrieved a\nplausible candidate for it (PRD \u00a717).",
+        "operationId": "get_coverage_api_v1_jobs__job_id__coverage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CoverageRow"
+                  },
+                  "title": "Response Get Coverage Api V1 Jobs  Job Id  Coverage Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Coverage",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/generate": {
+      "post": {
+        "operationId": "trigger_generate_api_v1_jobs__job_id__generate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trigger Generate",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/positioning": {
+      "post": {
+        "description": "Synchronous (not queued): one bounded LLM call, same rationale as resume\nupload. Not persisted \u2014 this is an ephemeral preview the user reviews\nbefore generating; POST /jobs/{id}/generate recomputes it internally as\npart of the same pipeline run, so nothing is lost by not storing it here.",
+        "operationId": "get_positioning_api_v1_jobs__job_id__positioning_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositioningResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Positioning",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/requirements": {
+      "get": {
+        "operationId": "get_requirements_api_v1_jobs__job_id__requirements_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RequirementPublic"
+                  },
+                  "title": "Response Get Requirements Api V1 Jobs  Job Id  Requirements Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Requirements",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/profile/facts": {
+      "get": {
+        "operationId": "list_profile_facts_api_v1_profile_facts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProfileFactPublic"
+                  },
+                  "title": "Response List Profile Facts Api V1 Profile Facts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Profile Facts",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/api/v1/profile/facts/{fact_id}": {
+      "patch": {
+        "description": "A user can correct a misextracted value before confirming it \u2014 the fact\nguard only ever checks against *confirmed* data going forward (Phase 5\ngeneration reads confirmed=True facts), so an unconfirmed fact with a typo\nis safe to fix here rather than re-uploading the whole resume.",
+        "operationId": "patch_profile_fact_api_v1_profile_facts__fact_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileFactPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileFactPublic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Profile Fact",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/api/v1/profile/resume": {
+      "post": {
+        "description": "Synchronous (not queued): a single resume is one bounded LLM call, unlike\nrepository ingestion or JD analysis which can involve many files/requirements.\nImmediate feedback is worth more here than the async/SSE pattern used\nelsewhere in the pipeline.",
+        "operationId": "upload_resume_api_v1_profile_resume_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_resume_api_v1_profile_resume_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProfileFactPublic"
+                  },
+                  "title": "Response Upload Resume Api V1 Profile Resume Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Resume",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "description": "Readiness gates traffic, so it must reflect every dependency a request\ncan fail on. Redis is included because token revocation fails closed\n(security/token_revocation.py): with Redis down, every authenticated\nrequest returns 503, which is not a state to route traffic into.",
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Ready Ready Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  }
+}
