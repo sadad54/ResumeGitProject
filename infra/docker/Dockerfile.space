@@ -1,0 +1,39 @@
+# Single-container deployment for free-tier hosts (Hugging Face Docker Spaces,
+# Render free web service): API + Dramatiq worker + Redis in one image.
+#
+# This is a deliberate portfolio/demo topology, not the production one.
+# infra/deployment/OPERATIONS.md describes the separated layout; this file
+# trades that for "runs on a free plan with one URL". Consequences:
+# - Redis is in-container and ephemeral: rate-limit counters, the revoked-token
+#   denylist and queued jobs are lost on restart (documented tradeoff in
+#   OPERATIONS.md §2). Postgres (Supabase) is external and durable.
+# - Exports are written to container disk and vanish on restart; they are
+#   regenerable from the database.
+# - One replica. That is also what keeps the local export store correct.
+FROM python:3.13-slim AS build
+WORKDIR /app
+RUN python -m venv /venv && /venv/bin/pip install --no-cache-dir --upgrade pip setuptools
+COPY packages packages
+COPY apps/api apps/api
+COPY apps/worker apps/worker
+RUN /venv/bin/pip install --no-cache-dir packages/contracts packages/prompts packages/evals apps/api apps/worker
+
+FROM python:3.13-slim AS runtime
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends redis-server \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /venv /venv
+ENV PATH="/venv/bin:$PATH" PYTHONUNBUFFERED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    REDIS_URL=redis://127.0.0.1:6379/0 LOCAL_STORAGE_ROOT=/data/storage
+RUN /venv/bin/python -m playwright install --with-deps chromium \
+    && /venv/bin/pip uninstall -y pip setuptools \
+    && rm -rf /root/.cache
+COPY apps/api/alembic apps/api/alembic
+COPY apps/api/alembic.ini apps/api/alembic.ini
+COPY infra/docker/space-entrypoint.sh /entrypoint.sh
+# HF Spaces run as uid 1000; make writable paths owned by it.
+RUN chmod +x /entrypoint.sh && useradd -m -u 1000 app && mkdir -p /data/storage /var/lib/redis \
+    && chown -R app:app /app /data /var/lib/redis /ms-playwright
+USER app
+EXPOSE 7860
+CMD ["/entrypoint.sh"]

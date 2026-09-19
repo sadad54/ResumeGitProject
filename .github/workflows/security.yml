@@ -44,6 +44,8 @@ jobs:
             dockerfile: infra/docker/Dockerfile.api
           - name: web
             dockerfile: infra/docker/Dockerfile.web
+          - name: space
+            dockerfile: infra/docker/Dockerfile.space
     steps:
       - uses: actions/checkout@v4
       - name: Build ${{ matrix.name }} image
