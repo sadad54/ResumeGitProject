@@ -94,7 +94,7 @@ export function JobWorkspace({ initialJobId = "" }: { initialJobId?: string }) {
   }
   if (!signedIn)
     return (
-      <EmptyState title="Find where your evidence fits">
+      <EmptyState title="Find where your evidence fits" level="h2">
         Log in on Home to capture and analyze a job.
       </EmptyState>
     );

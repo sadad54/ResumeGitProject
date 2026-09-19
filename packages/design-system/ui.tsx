@@ -27,13 +27,19 @@ export function StatusPill({ status }: { status: string }) {
 export function EmptyState({
   title,
   children,
+  level = "h3",
 }: {
   title: string;
   children: ReactNode;
+  /** Defaults to h3 (the common case: nested under a section's own h2).
+   * Pass "h2" when this is the first heading-bearing content on the page,
+   * directly under the page's h1 — otherwise heading order skips a level. */
+  level?: "h2" | "h3";
 }) {
+  const Heading = level;
   return (
     <div className="ph-empty">
-      <h3>{title}</h3>
+      <Heading>{title}</Heading>
       <p>{children}</p>
     </div>
   );

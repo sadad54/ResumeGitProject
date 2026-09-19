@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from proofhire_api.config import get_settings
 from proofhire_api.logging import configure_logging
+from proofhire_api.middleware.security_headers import SecurityHeadersMiddleware
 from proofhire_api.middleware.tracing import TraceIdMiddleware
 from proofhire_api.routers import (
     applications,
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(TraceIdMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     # The web app (localhost:3000) and API (localhost:8000) are different
     # origins in local dev, so the browser sends CORS preflight OPTIONS
     # requests before any cross-origin POST/PATCH/etc. Without this, every

@@ -106,7 +106,7 @@ export function EvidenceConstellation({
 
   if (!signedIn && !loading)
     return (
-      <EmptyState title="Your proof starts here">
+      <EmptyState title="Your proof starts here" level="h2">
         Log in on Home, then sync your GitHub repositories.
       </EmptyState>
     );
