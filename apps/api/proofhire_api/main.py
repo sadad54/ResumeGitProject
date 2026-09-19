@@ -9,6 +9,7 @@ from proofhire_api.config import get_settings
 from proofhire_api.logging import configure_logging
 from proofhire_api.middleware.security_headers import SecurityHeadersMiddleware
 from proofhire_api.middleware.tracing import TraceIdMiddleware
+from proofhire_api.telemetry import configure_tracing
 from proofhire_api.routers import (
     applications,
     auth,
@@ -25,12 +26,17 @@ from proofhire_api.routers import (
 def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
+    configure_tracing("proofhire-api", settings.otel_exporter_otlp_endpoint)
 
     app = FastAPI(
         title="ProofHire API",
         version="0.1.0",
         description="Evidence-grounded AI career agent — API",
     )
+    if settings.otel_exporter_otlp_endpoint:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        FastAPIInstrumentor.instrument_app(app)
 
     app.add_middleware(TraceIdMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)

@@ -13,14 +13,15 @@ import logging
 import uuid
 
 import dramatiq
-from proofhire_api.db import async_session_factory
 from proofhire_api.models.evidence_match import EvidenceMatch
 from proofhire_api.models.job import Job
 from proofhire_api.models.requirement import Requirement
 from proofhire_api.repositories.evidence import EvidenceQuery, SQLAlchemyEvidenceRepository
+from proofhire_api.telemetry import traced_stage
 from proofhire_prompts.rerank_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
 from sqlalchemy import delete, select
 
+from proofhire_worker.db import async_session_factory
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
 from proofhire_worker.intelligence.match_label import resolve_match_label
 from proofhire_worker.intelligence.provider_factory import get_embedding_provider, get_provider
@@ -38,6 +39,7 @@ def compute_coverage(job_id: str) -> None:
     asyncio.run(_compute_coverage(job_id))
 
 
+@traced_stage("coverage_computation")
 async def _compute_coverage(job_id_str: str) -> None:
     job_id = uuid.UUID(job_id_str)
     provider = get_provider()

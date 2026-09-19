@@ -4,12 +4,13 @@ upload (Phase 5) — one bounded render/validate cycle, not a multi-stage
 pipeline that benefits from queueing.
 """
 
+from proofhire_api.models.generated_claim import GeneratedClaim
+from proofhire_api.models.generated_document import GeneratedDocument
+from proofhire_api.telemetry import traced_stage
 from proofhire_contracts import ClaimVerificationStatus, DocumentType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proofhire_api.models.generated_claim import GeneratedClaim
-from proofhire_api.models.generated_document import GeneratedDocument
 from proofhire_worker.render.parse_back import extract_pdf_text, validate_parse_back
 from proofhire_worker.render.pdf_renderer import render_html_to_pdf
 from proofhire_worker.render.storage import save_bytes
@@ -24,6 +25,7 @@ class ParseBackValidationError(Exception):
         super().__init__(f"Parse-back validation failed — missing: {missing}")
 
 
+@traced_stage("document_export")
 async def export_document(
     session: AsyncSession,
     document: GeneratedDocument,

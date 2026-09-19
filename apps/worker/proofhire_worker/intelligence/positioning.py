@@ -4,14 +4,14 @@ generating) and the generation pipeline itself, since generation needs the
 same positioning context internally.
 """
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from proofhire_api.models.evidence import Evidence
 from proofhire_api.models.evidence_match import EvidenceMatch
 from proofhire_api.models.job import Job
 from proofhire_api.models.requirement import Requirement
-from proofhire_prompts.position_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
+from proofhire_prompts.position_v1 import SYSTEM_PROMPT, build_user_message
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig, StructuredResult
 from proofhire_worker.intelligence.provider_factory import get_provider
 from proofhire_worker.intelligence.schemas import PositioningOutput

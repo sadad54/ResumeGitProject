@@ -15,11 +15,6 @@ import logging
 import uuid
 
 import dramatiq
-from proofhire_contracts import EvidenceType, RunEventName
-from proofhire_prompts.evidence_extract_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
-from sqlalchemy import select
-
-from proofhire_api.db import async_session_factory
 from proofhire_api.models.github_connection import GitHubConnection
 from proofhire_api.models.repository import Repository
 from proofhire_api.models.source_artifact import SourceArtifact
@@ -30,7 +25,13 @@ from proofhire_api.repositories.evidence import (
 )
 from proofhire_api.security.token_crypto import decrypt_token
 from proofhire_api.services.github_client import GitHubClient
+from proofhire_api.telemetry import traced_stage
+from proofhire_contracts import EvidenceType, RunEventName
 from proofhire_contracts.embedding import EMBEDDING_MODEL
+from proofhire_prompts.evidence_extract_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
+from sqlalchemy import select
+
+from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.intelligence.confidence import combine_confidence
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
@@ -64,6 +65,7 @@ def _group_files(files: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
     return groups
 
 
+@traced_stage("evidence_extraction")
 async def _extract_for_repository(repository_id_str: str, run_id_str: str) -> None:
     repository_id = uuid.UUID(repository_id_str)
     model_config = ModelConfig(model="claude-sonnet-5")

@@ -5,7 +5,7 @@ messages to connected clients (PRD §23 "Streaming").
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 from proofhire_contracts import RunEventName
@@ -29,6 +29,6 @@ async def publish_event(run_id: str, event: RunEventName, data: dict) -> None:
     payload = {
         "event": event.value,
         "data": data,
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
     }
     await _get_client().publish(channel_name(run_id), json.dumps(payload))

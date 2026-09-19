@@ -9,8 +9,7 @@ without hitting a real API or spending money in CI.
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol, TypeVar
 
 from pydantic import BaseModel

@@ -4,9 +4,19 @@
 This module imports every task subpackage so Dramatiq discovers all actors.
 """
 
-from proofhire_worker.broker import broker  # noqa: F401
-from proofhire_worker import ingestion, intelligence, render  # noqa: F401
 import dramatiq
+from proofhire_api.config import get_settings
+from proofhire_api.telemetry import configure_tracing
+
+# Must run before the actor-declaring imports below: dramatiq.actor() reads the
+# globally-set broker at decoration time, and this module sets it as a side
+# effect. A straight `import` (rather than `from ... import broker`) keeps this
+# ordering intact under ruff's isort, which sorts straight imports as their own
+# block ahead of `from` imports regardless of alphabetical module path.
+import proofhire_worker.broker  # noqa: F401
+from proofhire_worker import ingestion, intelligence, render  # noqa: F401
+
+configure_tracing("proofhire-worker", get_settings().otel_exporter_otlp_endpoint)
 
 
 @dramatiq.actor

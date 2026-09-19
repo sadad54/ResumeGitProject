@@ -12,6 +12,15 @@ import logging
 import uuid
 
 import dramatiq
+from proofhire_api.models.evidence import Evidence
+from proofhire_api.models.evidence_match import EvidenceMatch
+from proofhire_api.models.generated_claim import ClaimEvidence, GeneratedClaim
+from proofhire_api.models.generated_document import GeneratedDocument
+from proofhire_api.models.generation_run import GenerationRun
+from proofhire_api.models.job import Job
+from proofhire_api.models.profile_fact import ProfileFact
+from proofhire_api.models.requirement import Requirement
+from proofhire_api.telemetry import traced_stage
 from proofhire_contracts import (
     ClaimVerificationStatus,
     DocumentType,
@@ -21,34 +30,44 @@ from proofhire_contracts import (
 )
 from proofhire_prompts.claim_verify_v1 import (
     PROMPT_VERSION as CLAIM_VERIFY_VERSION,
+)
+from proofhire_prompts.claim_verify_v1 import (
     SYSTEM_PROMPT as CLAIM_VERIFY_SYSTEM,
+)
+from proofhire_prompts.claim_verify_v1 import (
     build_user_message as build_claim_verify_message,
 )
 from proofhire_prompts.cover_letter_write_v1 import (
     PROMPT_VERSION as COVER_LETTER_WRITE_VERSION,
+)
+from proofhire_prompts.cover_letter_write_v1 import (
     SYSTEM_PROMPT as COVER_LETTER_WRITE_SYSTEM,
+)
+from proofhire_prompts.cover_letter_write_v1 import (
     build_repair_message as build_cover_letter_repair_message,
+)
+from proofhire_prompts.cover_letter_write_v1 import (
     build_user_message as build_cover_letter_write_message,
 )
 from proofhire_prompts.resume_write_v1 import (
     CONSERVATIVE_INSTRUCTIONS,
     FULL_INSTRUCTIONS,
+)
+from proofhire_prompts.resume_write_v1 import (
     PROMPT_VERSION as RESUME_WRITE_VERSION,
+)
+from proofhire_prompts.resume_write_v1 import (
     SYSTEM_PROMPT as RESUME_WRITE_SYSTEM,
+)
+from proofhire_prompts.resume_write_v1 import (
     build_repair_message as build_resume_repair_message,
+)
+from proofhire_prompts.resume_write_v1 import (
     build_user_message as build_resume_write_message,
 )
 from sqlalchemy import select
 
-from proofhire_api.db import async_session_factory
-from proofhire_api.models.evidence import Evidence
-from proofhire_api.models.evidence_match import EvidenceMatch
-from proofhire_api.models.generated_claim import ClaimEvidence, GeneratedClaim
-from proofhire_api.models.generated_document import GeneratedDocument
-from proofhire_api.models.generation_run import GenerationRun
-from proofhire_api.models.job import Job
-from proofhire_api.models.profile_fact import ProfileFact
-from proofhire_api.models.requirement import Requirement
+from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.intelligence.claim_finalizer import finalize_claim_status
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
@@ -335,6 +354,7 @@ async def _generate_cover_letter(
     return content, all_finalized
 
 
+@traced_stage("generation")
 async def _generate(job_id_str: str, mode_str: str, document_type_str: str) -> None:
     job_id = uuid.UUID(job_id_str)
     mode = TailoringMode(mode_str)

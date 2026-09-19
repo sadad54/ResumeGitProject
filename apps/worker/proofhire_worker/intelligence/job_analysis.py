@@ -8,16 +8,17 @@ import logging
 import uuid
 
 import dramatiq
-from proofhire_contracts import RequirementCategory, RunEventName
-from proofhire_prompts.jd_extract_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
-
-from proofhire_api.db import async_session_factory
 from proofhire_api.models.job import Job
 from proofhire_api.repositories.job import (
     JobAnalysisResult,
     RequirementCandidate,
     SQLAlchemyJobRepository,
 )
+from proofhire_api.telemetry import traced_stage
+from proofhire_contracts import RequirementCategory, RunEventName
+from proofhire_prompts.jd_extract_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
+
+from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
 from proofhire_worker.intelligence.provider_factory import get_provider
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 VALID_CATEGORIES = {c.value for c in RequirementCategory}
 
 
+@traced_stage("job_analysis")
 async def _analyze(job_id_str: str) -> None:
     job_id = uuid.UUID(job_id_str)
     provider = get_provider()

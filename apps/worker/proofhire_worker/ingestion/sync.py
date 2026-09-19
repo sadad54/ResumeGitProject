@@ -10,17 +10,19 @@ import asyncio
 import hashlib
 import logging
 import uuid
+from datetime import UTC
 
 import dramatiq
-from proofhire_contracts import RunEventName, SyncStatus
-from sqlalchemy import select
-
-from proofhire_api.db import async_session_factory
 from proofhire_api.models.github_connection import GitHubConnection
 from proofhire_api.models.repository import Repository
 from proofhire_api.models.source_artifact import SourceArtifact
 from proofhire_api.models.sync_run import SyncRun
 from proofhire_api.security.token_crypto import decrypt_token
+from proofhire_api.telemetry import traced_stage
+from proofhire_contracts import RunEventName, SyncStatus
+from sqlalchemy import select
+
+from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.ingestion.classifier import classify, is_excluded
 from proofhire_worker.ingestion.secret_scanner import contains_secret
@@ -121,6 +123,7 @@ async def _sync_one_repository(session, client, repository: Repository, run_id: 
     )
 
 
+@traced_stage("repository_sync")
 async def _run(run_id_str: str, repository_ids: list[str]) -> None:
     from proofhire_api.services.github_client import GitHubClient
 
@@ -164,14 +167,14 @@ async def _run(run_id_str: str, repository_ids: list[str]) -> None:
                 extract_evidence.send(str(repository.id), run_id_str)
 
             sync_run.status = SyncStatus.COMPLETED
-        except Exception as exc:  # noqa: BLE001 — surfaced via SyncRun.error + event
+        except Exception as exc:
             sync_run.status = SyncStatus.FAILED
             sync_run.error = str(exc)
             logger.exception("sync_run_failed", extra={"run_id": run_id_str})
         finally:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
-            sync_run.completed_at = datetime.now(timezone.utc)
+            sync_run.completed_at = datetime.now(UTC)
             await session.commit()
 
 
