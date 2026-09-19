@@ -64,13 +64,7 @@ jobs:
       # fail if there were any.
       - name: Report findings with paths
         run: |
-          jq -r '
-            [.Results[]? | .Target as $t | (.Vulnerabilities // [])[] | {t: $t, p: (.PkgPath // ""), id: .VulnerabilityID, s: .Severity, pkg: .PkgName, v: .InstalledVersion, fix: .FixedVersion}]
-            | if length == 0 then "No CRITICAL/HIGH findings" else
-                (.[] | "\(.s)	\(.pkg) \(.v) -> \(.fix)	\(.id)	\(if .p != "" then .p else .t end)"),
-                "
-\(length) finding(s)"
-              end
-          ' trivy-${{ matrix.name }}.json
+          jq -r '[.Results[]? | .Target as $t | (.Vulnerabilities // [])[] | "\(.Severity)  \(.PkgName) \(.InstalledVersion) -> \(.FixedVersion)  \(.VulnerabilityID)  \(.PkgPath // $t)"] | if length == 0 then "No CRITICAL/HIGH findings" else .[] end' trivy-${{ matrix.name }}.json
           count=$(jq '[.Results[]? | (.Vulnerabilities // [])[]] | length' trivy-${{ matrix.name }}.json)
+          echo "$count finding(s)"
           test "$count" -eq 0
