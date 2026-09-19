@@ -52,8 +52,25 @@ jobs:
         uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: proofhire-${{ matrix.name }}:scan
-          format: table
-          exit-code: '1'
+          format: json
+          output: trivy-${{ matrix.name }}.json
+          exit-code: '0'
           ignore-unfixed: true
           severity: CRITICAL,HIGH
           vuln-type: os,library
+      # The table renderer truncates the file path, which is the one field that
+      # tells you whether a finding is in your code, a base-image toolchain, or
+      # something a build step dragged in. Print path + fix per finding, then
+      # fail if there were any.
+      - name: Report findings with paths
+        run: |
+          jq -r '
+            [.Results[]? | .Target as $t | (.Vulnerabilities // [])[] | {t: $t, p: (.PkgPath // ""), id: .VulnerabilityID, s: .Severity, pkg: .PkgName, v: .InstalledVersion, fix: .FixedVersion}]
+            | if length == 0 then "No CRITICAL/HIGH findings" else
+                (.[] | "\(.s)	\(.pkg) \(.v) -> \(.fix)	\(.id)	\(if .p != "" then .p else .t end)"),
+                "
+\(length) finding(s)"
+              end
+          ' trivy-${{ matrix.name }}.json
+          count=$(jq '[.Results[]? | (.Vulnerabilities // [])[]] | length' trivy-${{ matrix.name }}.json)
+          test "$count" -eq 0
