@@ -472,13 +472,46 @@ kbd {
 .ph-review > p {
   margin-bottom: 24px;
 }
-.ph-empty,
-.ph-skeleton {
+.ph-empty {
   padding: 50px 24px;
   text-align: center;
   border: 1px dashed var(--ph-line);
   border-radius: 12px;
   color: var(--ph-muted);
+}
+/* Skeleton states: content-shaped placeholders while data loads, so layout
+   doesn't jump when it arrives (this is what keeps CLS down on the list
+   pages). Shimmer is disabled under prefers-reduced-motion by the global
+   rule below; the static block still reads as "loading". */
+.ph-skeleton,
+.ph-skeleton-line {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ph-line) 55%, transparent);
+  border-radius: 8px;
+}
+.ph-skeleton-line {
+  height: 0.85em;
+  border-radius: 4px;
+}
+.ph-skeleton::after,
+.ph-skeleton-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--ph-surface, #fff) 60%, transparent),
+    transparent
+  );
+  animation: ph-shimmer 1.4s infinite;
+}
+@keyframes ph-shimmer {
+  to {
+    transform: translateX(100%);
+  }
 }
 .ph-empty h3 {
   color: var(--ph-text);

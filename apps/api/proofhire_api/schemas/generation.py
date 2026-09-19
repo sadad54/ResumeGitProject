@@ -53,6 +53,7 @@ class GeneratedDocumentPublic(BaseModel):
     html_ref: str | None = None
     pdf_ref: str | None = None
     plaintext_ref: str | None = None
+    page_count: int | None = None
 
     model_config = {"from_attributes": True}
 

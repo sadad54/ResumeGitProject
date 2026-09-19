@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { openRunEvents } from "@/lib/events";
 import { apiBaseUrl, apiFetch, ApiError, getAccessToken } from "@/lib/api";
+import { Skeleton } from "@proofhire/design-system/ui";
+import { DocumentDiff } from "./document-diff";
+import { DocumentPreview } from "./document-preview";
 
 type Job = { id: string; role: string | null; company: string | null };
 
@@ -22,10 +25,13 @@ type CoverLetterContent = { body_paragraphs: string[] };
 
 type GeneratedDocument = {
   id: string;
+  job_id: string;
+  version: number;
   type: "resume" | "cover_letter";
   content_json: ResumeContent | CoverLetterContent;
   pdf_ref: string | null;
   template_id: string;
+  page_count: number | null;
 };
 
 type GeneratedClaim = {
@@ -69,6 +75,13 @@ export function ResumeWorkspace() {
   const [status, setStatus] = useState<"idle" | "generating" | "done">("idle");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const [compareId, setCompareId] = useState<string>("");
+  const [showPreview, setShowPreview] = useState(true);
+  const [lastExport, setLastExport] = useState<{
+    page_count: number | null;
+    overflowed: boolean;
+  } | null>(null);
 
   useEffect(() => {
     setSignedIn(!!getAccessToken());
@@ -78,7 +91,8 @@ export function ResumeWorkspace() {
     );
     apiFetch<GeneratedDocument[]>("/api/v1/documents")
       .then(setSavedDocuments)
-      .catch(() => setError("Could not load saved documents."));
+      .catch(() => setError("Could not load saved documents."))
+      .finally(() => setLoadingDocuments(false));
     apiFetch<Job[]>("/api/v1/jobs")
       .then(setJobs)
       .catch(() => {});
@@ -177,10 +191,14 @@ export function ResumeWorkspace() {
     setExporting(true);
     setError(null);
     try {
-      await apiFetch(
+      const result = await apiFetch<{
+        page_count: number | null;
+        overflowed: boolean;
+      }>(
         `/api/v1/documents/${document.id}/export${document.type === "resume" ? `?template=${encodeURIComponent(template)}` : ""}`,
         { method: "POST" },
       );
+      setLastExport(result);
       const refreshed = await apiFetch<GeneratedDocument>(
         `/api/v1/documents/${document.id}`,
       );
@@ -223,7 +241,8 @@ export function ResumeWorkspace() {
   return (
     <div className="flex flex-col xl:flex-row gap-6">
       <div className="flex-1 min-w-0 space-y-4">
-        <label className="ph-field">
+        {loadingDocuments && <Skeleton lines={2} label="Loading saved documents" />}
+        <label className="ph-field" hidden={loadingDocuments}>
           Saved documents
           <select
             value={document?.id || ""}
@@ -310,7 +329,50 @@ export function ResumeWorkspace() {
                 Download PDF
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setShowPreview((v) => !v)}
+              aria-pressed={showPreview}
+              className="rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
+            >
+              {showPreview ? "Hide preview" : "Show preview"}
+            </button>
+            <label className="ph-field text-sm">
+              Compare with
+              <select
+                aria-label="Compare with another document"
+                value={compareId}
+                onChange={(e) => setCompareId(e.target.value)}
+              >
+                <option value="">— none —</option>
+                {savedDocuments
+                  .filter((d) => d.id !== document.id && d.type === document.type)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      v{d.version} · {d.template_id} · {d.id.slice(0, 8)}
+                      {d.job_id === document.job_id ? " (same job)" : ""}
+                    </option>
+                  ))}
+              </select>
+            </label>
           </div>
+        )}
+
+        {lastExport?.overflowed && (
+          <p role="alert" className="ph-error">
+            This resume rendered to {lastExport.page_count} pages. Most ATS
+            parsers weight first-page content; consider trimming bullets or
+            switching to the Technical Dense template.
+          </p>
+        )}
+
+        {document && compareId && (
+          <DocumentDiff
+            before={savedDocuments.find((d) => d.id === compareId)?.content_json}
+            after={document.content_json}
+            beforeLabel={`v${savedDocuments.find((d) => d.id === compareId)?.version ?? "?"}`}
+            afterLabel={`v${document.version}`}
+          />
         )}
 
         {document && document.type === "resume" && (
@@ -390,6 +452,12 @@ export function ResumeWorkspace() {
           </div>
         )}
       </div>
+
+      {document && showPreview && (
+        <div className="w-full shrink-0 xl:w-96">
+          <DocumentPreview documentId={document.id} template={template} />
+        </div>
+      )}
 
       {activeClaim && (
         <div className="w-72 shrink-0 space-y-2 rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-800">

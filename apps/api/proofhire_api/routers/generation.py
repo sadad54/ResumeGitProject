@@ -2,7 +2,7 @@ import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from proofhire_contracts import DocumentType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -177,6 +177,46 @@ async def download_document_pdf(
 
     return FileResponse(
         document.pdf_ref, media_type="application/pdf", filename=f"resume-{document.id}.pdf"
+    )
+
+
+@router.get("/documents/{document_id}/preview", response_class=HTMLResponse)
+async def preview_document_html(
+    document_id: uuid.UUID,
+    template: Literal["ats_minimal", "technical_dense", "modern_editorial"] | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Live preview for the resume workspace (checklist §10.7).
+
+    Runs the *same* template renderer the PDF export uses, minus the Chromium
+    step, so what the user sees while switching templates is what the export
+    will contain — not a separate React approximation that can drift from the
+    real output. Nothing is persisted; this is read-only.
+    """
+    document = await db.get(GeneratedDocument, document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    job = await db.get(Job, document.job_id)
+    if job is None or job.user_id != current_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+
+    from proofhire_worker.render.templates import render_cover_letter_html, render_resume_html
+
+    if document.type == DocumentType.RESUME:
+        html = render_resume_html(
+            document.content_json, current_user.email, template or document.template_id
+        )
+    else:
+        html = render_cover_letter_html(document.content_json, current_user.email)
+
+    # The web app renders this inside a sandboxed iframe; the CSP here is
+    # belt-and-braces so the document can't run script even if embedded
+    # elsewhere. The renderer HTML-escapes all content, but generated text is
+    # still model output and gets no more trust than it needs.
+    return HTMLResponse(
+        html,
+        headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"},
     )
 
 

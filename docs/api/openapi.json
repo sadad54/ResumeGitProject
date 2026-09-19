@@ -767,6 +767,17 @@
             "title": "Job Id",
             "type": "string"
           },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
           "pdf_ref": {
             "anyOf": [
               {
@@ -2471,6 +2482,76 @@
           }
         ],
         "summary": "Download Document Pdf",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/preview": {
+      "get": {
+        "description": "Live preview for the resume workspace (checklist \u00a710.7).\n\nRuns the *same* template renderer the PDF export uses, minus the Chromium\nstep, so what the user sees while switching templates is what the export\nwill contain \u2014 not a separate React approximation that can drift from the\nreal output. Nothing is persisted; this is read-only.",
+        "operationId": "preview_document_html_api_v1_documents__document_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "template",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ats_minimal",
+                    "technical_dense",
+                    "modern_editorial"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Document Html",
         "tags": [
           "generation"
         ]

@@ -14,7 +14,7 @@ import {
 
 const Canvas = dynamic(() => import("./constellation-canvas"), {
   ssr: false,
-  loading: () => <Skeleton />,
+  loading: () => <Skeleton height="420px" label="Loading graph" />,
 });
 type Job = { id: string; role: string | null; company: string | null };
 
@@ -171,7 +171,7 @@ export function EvidenceConstellation({
           {error}
         </p>
       )}
-      {loading && <Skeleton />}
+      {loading && <Skeleton lines={4} label="Loading evidence" />}
       {graph?.truncated && (
         <p role="status">
           Showing a bounded subset of your evidence. Use the Review list to

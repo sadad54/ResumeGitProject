@@ -232,6 +232,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{document_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Document Html
+         * @description Live preview for the resume workspace (checklist §10.7).
+         *
+         *     Runs the *same* template renderer the PDF export uses, minus the Chromium
+         *     step, so what the user sees while switching templates is what the export
+         *     will contain — not a separate React approximation that can drift from the
+         *     real output. Nothing is persisted; this is read-only.
+         */
+        get: operations["preview_document_html_api_v1_documents__document_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/events/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -1077,6 +1102,8 @@ export interface components {
              * Format: uuid
              */
             job_id: string;
+            /** Page Count */
+            page_count?: number | null;
             /** Pdf Ref */
             pdf_ref?: string | null;
             /** Plaintext Ref */
@@ -1876,6 +1903,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_document_html_api_v1_documents__document_id__preview_get: {
+        parameters: {
+            query?: {
+                template?: ("ats_minimal" | "technical_dense" | "modern_editorial") | null;
+            };
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
                 };
             };
             /** @description Validation Error */
