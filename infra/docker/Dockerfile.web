@@ -1,10 +1,6 @@
+# Build stage: has npm, devDependencies, the works.
 FROM node:22-slim AS build
 WORKDIR /app
-# The bundled npm in node:22-slim carries CRITICAL/HIGH CVEs in its own
-# internals (tar, pacote, sigstore, brace-expansion). They're npm's deps, not
-# ours — npm audit passes — so the only fix is a newer npm. Caught by the CI
-# container scan on its first ever run of this Dockerfile.
-RUN npm install -g npm@latest
 COPY package*.json ./
 COPY apps/web/package.json apps/web/package.json
 RUN npm ci
@@ -13,5 +9,18 @@ COPY packages packages
 ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 RUN npm run build --workspace apps/web
+
+# Runtime stage: Next.js standalone output, run with plain `node`. No npm in
+# this layer at all â€” npm's own bundled dependencies (tar, brace-expansion,
+# ip-address, ...) carried CRITICAL/HIGH CVEs that `npm install -g npm@latest`
+# did not clear, because npm's release still vendors them. A production image
+# has no reason to contain a package manager, so the fix is to not ship one.
+FROM node:22-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+COPY --from=build /app/apps/web/.next/standalone ./
+COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
 EXPOSE 3000
-CMD ["npm", "run", "start", "--workspace", "apps/web", "--", "--hostname", "0.0.0.0"]
+ENV HOSTNAME=0.0.0.0 PORT=3000
+CMD ["node", "apps/web/server.js"]

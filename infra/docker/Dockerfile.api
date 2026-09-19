@@ -1,14 +1,28 @@
-FROM python:3.13-slim
+# Build stage: install everything into a self-contained virtualenv.
+FROM python:3.13-slim AS build
 WORKDIR /app
+RUN python -m venv /venv && /venv/bin/pip install --no-cache-dir --upgrade pip setuptools
 COPY packages packages
 COPY apps/api apps/api
 COPY apps/worker apps/worker
-# The slim base ships a pip/setuptools old enough to carry HIGH CVEs (Trivy:
-# setuptools path traversal, pip's vendored msgpack OOB read). Neither is in our
-# dependency tree, so pip-audit can't see them; upgrading the toolchain is the
-# fix, and the CI container scan is what keeps it fixed.
-RUN pip install --no-cache-dir --upgrade pip setuptools     && pip install --no-cache-dir -e packages/contracts -e packages/prompts -e packages/evals -e apps/api -e apps/worker \
-    && python -m playwright install --with-deps chromium
-ENV PYTHONUNBUFFERED=1
+# Not editable: the runtime stage copies the venv without the source tree's
+# build metadata, so packages must be fully installed into site-packages.
+RUN /venv/bin/pip install --no-cache-dir packages/contracts packages/prompts packages/evals apps/api apps/worker
+
+# Runtime stage: the venv and the Playwright browser, and nothing else. pip and
+# setuptools are removed after use — Trivy flagged pip's vendored msgpack and a
+# setuptools copy in the previous single-stage image, and neither is needed to
+# *run* the API. Alembic migrations run from this image too (`alembic` is in
+# the venv), so the migration files are copied alongside.
+FROM python:3.13-slim AS runtime
+WORKDIR /app
+COPY --from=build /venv /venv
+ENV PATH="/venv/bin:$PATH" PYTHONUNBUFFERED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN /venv/bin/python -m playwright install --with-deps chromium \
+    && /venv/bin/pip uninstall -y pip setuptools \
+    && rm -rf /usr/local/lib/python3.13/site-packages/pip* /usr/local/lib/python3.13/site-packages/setuptools* \
+    && rm -rf /root/.cache
+COPY apps/api/alembic apps/api/alembic
+COPY apps/api/alembic.ini apps/api/alembic.ini
 EXPOSE 8000
 CMD ["uvicorn", "proofhire_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -34,6 +34,10 @@ const csp = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Standalone output: .next/standalone is a self-contained server that runs
+  // with plain `node`, so the production image (infra/docker/Dockerfile.web)
+  // ships no npm at all. See that file for why that matters.
+  output: "standalone",
   async headers() {
     return [
       {
