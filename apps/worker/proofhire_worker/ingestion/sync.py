@@ -26,6 +26,7 @@ from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.ingestion.classifier import classify, is_excluded
 from proofhire_worker.ingestion.secret_scanner import contains_secret
+from proofhire_worker.ingestion.staleness import mark_evidence_stale_for_artifacts
 from proofhire_worker.ingestion.tech_extraction import extract
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,11 @@ logger = logging.getLogger(__name__)
 MAX_P2_FILES = 60
 
 
-async def _sync_one_repository(session, client, repository: Repository, run_id: uuid.UUID) -> None:
+async def _sync_one_repository(
+    session, client, repository: Repository, run_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Sync one repository. Returns the ids of artifacts whose content is new or
+    changed, so extraction can run over only those."""
     repository.sync_status = SyncStatus.SYNCING
     await session.commit()
     await publish_event(
@@ -64,6 +69,11 @@ async def _sync_one_repository(session, client, repository: Repository, run_id: 
 
     language_summary: dict = dict(repository.language_summary or {})
     created_count = 0
+    # Artifacts whose content is new or changed this sync. Only these need
+    # re-extraction — re-running the LLM over every unchanged P0/P1 file on each
+    # sync is the dominant avoidable cost (PRD §40 "repository scale/cost").
+    changed_artifact_ids: list[uuid.UUID] = []
+    superseded_artifact_ids: list[uuid.UUID] = []
 
     for path, artifact_type, priority in candidates:
         content = await client.get_file_content(repository.owner, repository.name, path, sha)
@@ -75,15 +85,23 @@ async def _sync_one_repository(session, client, repository: Repository, run_id: 
 
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-        existing = await session.scalar(
-            select(SourceArtifact).where(
-                SourceArtifact.repository_id == repository.id,
-                SourceArtifact.path == path,
-                SourceArtifact.content_hash == content_hash,
-            )
+        prior_at_path = list(
+            (
+                await session.scalars(
+                    select(SourceArtifact).where(
+                        SourceArtifact.repository_id == repository.id,
+                        SourceArtifact.path == path,
+                    )
+                )
+            ).all()
         )
-        if existing is not None:
+        if any(a.content_hash == content_hash for a in prior_at_path):
             continue  # unchanged since last sync — idempotent skip
+
+        # Reached only when this path is new, or its content actually changed.
+        # Any earlier rows for the path are now superseded, so evidence citing
+        # them no longer describes what is at this commit.
+        superseded_artifact_ids.extend(a.id for a in prior_at_path)
 
         deterministic_metadata = extract(path, content)
         if deterministic_metadata:
@@ -104,7 +122,11 @@ async def _sync_one_repository(session, client, repository: Repository, run_id: 
             metadata_json=deterministic_metadata,
         )
         session.add(artifact)
+        await session.flush()  # assigns artifact.id
+        changed_artifact_ids.append(artifact.id)
         created_count += 1
+
+    stale_count = await mark_evidence_stale_for_artifacts(session, superseded_artifact_ids)
 
     repository.last_commit_sha = sha
     repository.last_analyzed_sha = sha
@@ -119,8 +141,11 @@ async def _sync_one_repository(session, client, repository: Repository, run_id: 
             "repository_id": str(repository.id),
             "artifacts_created": created_count,
             "files_scanned": len(candidates),
+            "evidence_marked_stale": stale_count,
         },
     )
+
+    return changed_artifact_ids
 
 
 @traced_stage("repository_sync")
@@ -156,7 +181,19 @@ async def _run(run_id_str: str, repository_ids: list[str]) -> None:
 
                 token = decrypt_token(connection.token_ref)
                 client = GitHubClient(token)
-                await _sync_one_repository(session, client, repository, run_id)
+                changed_artifact_ids = await _sync_one_repository(
+                    session, client, repository, run_id
+                )
+
+                if not changed_artifact_ids:
+                    # Nothing changed since the last sync, so there is nothing new
+                    # to extract. Skipping here is what makes a re-sync cheap
+                    # instead of re-running the LLM over the whole repository.
+                    logger.info(
+                        "extraction_skipped_no_changes",
+                        extra={"repository_id": str(repository.id), "run_id": run_id_str},
+                    )
+                    continue
 
                 # Enqueued on the separate `ai` queue rather than called inline —
                 # keeps ingestion (this module) and intelligence (Phase 2+) scaling
@@ -164,7 +201,11 @@ async def _run(run_id_str: str, repository_ids: list[str]) -> None:
                 # block the rest of this sync run.
                 from proofhire_worker.intelligence.evidence_extraction import extract_evidence
 
-                extract_evidence.send(str(repository.id), run_id_str)
+                extract_evidence.send(
+                    str(repository.id),
+                    run_id_str,
+                    [str(a) for a in changed_artifact_ids],
+                )
 
             sync_run.status = SyncStatus.COMPLETED
         except Exception as exc:

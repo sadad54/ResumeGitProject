@@ -66,7 +66,9 @@ def _group_files(files: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
 
 
 @traced_stage("evidence_extraction")
-async def _extract_for_repository(repository_id_str: str, run_id_str: str) -> None:
+async def _extract_for_repository(
+    repository_id_str: str, run_id_str: str, artifact_ids: list[str] | None = None
+) -> None:
     repository_id = uuid.UUID(repository_id_str)
     model_config = ModelConfig(model="claude-sonnet-5")
 
@@ -85,12 +87,16 @@ async def _extract_for_repository(repository_id_str: str, run_id_str: str) -> No
 
         client = GitHubClient(decrypt_token(connection.token_ref))
 
-        artifacts_result = await session.scalars(
-            select(SourceArtifact).where(
-                SourceArtifact.repository_id == repository_id,
-                SourceArtifact.priority.in_(["p0", "p1"]),
-            )
+        stmt = select(SourceArtifact).where(
+            SourceArtifact.repository_id == repository_id,
+            SourceArtifact.priority.in_(["p0", "p1"]),
         )
+        if artifact_ids:
+            # Incremental re-sync: only artifacts whose content actually changed.
+            # Absent (None) means a full extraction — the first sync of a
+            # repository, or an explicit re-extract.
+            stmt = stmt.where(SourceArtifact.id.in_([uuid.UUID(a) for a in artifact_ids]))
+        artifacts_result = await session.scalars(stmt)
         artifacts = list(artifacts_result.all())
         if not artifacts:
             return
@@ -232,7 +238,7 @@ async def _extract_for_repository(repository_id_str: str, run_id_str: str) -> No
 
 
 @dramatiq.actor(max_retries=1, queue_name="ai", time_limit=600_000)
-def extract_evidence(repository_id: str, run_id: str) -> None:
+def extract_evidence(repository_id: str, run_id: str, artifact_ids: list[str] | None = None) -> None:
     import asyncio
 
-    asyncio.run(_extract_for_repository(repository_id, run_id))
+    asyncio.run(_extract_for_repository(repository_id, run_id, artifact_ids))
