@@ -29,3 +29,31 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Dependency scanning (above) only covers what our manifests declare. The
+  # container also ships an OS userland — a base image with a critical libc or
+  # openssl CVE would pass npm audit and pip-audit cleanly while still being
+  # the thing an attacker actually reaches.
+  containers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: infra/docker/Dockerfile.api
+          - name: web
+            dockerfile: infra/docker/Dockerfile.web
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.name }} image
+        run: docker build -f ${{ matrix.dockerfile }} -t proofhire-${{ matrix.name }}:scan .
+      - name: Scan ${{ matrix.name }} image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: proofhire-${{ matrix.name }}:scan
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          vuln-type: os,library
