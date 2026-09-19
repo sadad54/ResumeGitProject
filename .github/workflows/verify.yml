@@ -66,7 +66,26 @@ jobs:
       - run: npm run build --workspace apps/web
       - run: node --test apps/extension/tests/*.test.mjs
       - run: npm exec --workspace apps/web -- playwright install --with-deps chromium
-      - run: npm exec --workspace apps/web -- playwright test
+      - run: npm exec --workspace apps/web -- playwright test --grep-invert "matches baseline"
+      # Visual regression. Baselines are per-platform; Linux ones must be
+      # generated on Linux. If none are committed yet, generate them and
+      # publish as an artifact to commit — and say so — instead of silently
+      # passing an empty comparison.
+      - name: Visual regression
+        id: visual
+        working-directory: apps/web
+        run: |
+          if ls tests/visual.spec.ts-snapshots/*-linux.png >/dev/null 2>&1; then
+            npx playwright test tests/visual.spec.ts --project=desktop
+          else
+            echo "::warning::No Linux visual baselines committed; generating them. Download the visual-baselines artifact and commit apps/web/tests/visual.spec.ts-snapshots/*-linux.png to arm the comparison."
+            npx playwright test tests/visual.spec.ts --project=desktop --update-snapshots
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-baselines
+          path: apps/web/tests/visual.spec.ts-snapshots/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
