@@ -3,7 +3,11 @@ WORKDIR /app
 COPY packages packages
 COPY apps/api apps/api
 COPY apps/worker apps/worker
-RUN pip install --no-cache-dir -e packages/contracts -e packages/prompts -e packages/evals -e apps/api -e apps/worker \
+# The slim base ships a pip/setuptools old enough to carry HIGH CVEs (Trivy:
+# setuptools path traversal, pip's vendored msgpack OOB read). Neither is in our
+# dependency tree, so pip-audit can't see them; upgrading the toolchain is the
+# fix, and the CI container scan is what keeps it fixed.
+RUN pip install --no-cache-dir --upgrade pip setuptools     && pip install --no-cache-dir -e packages/contracts -e packages/prompts -e packages/evals -e apps/api -e apps/worker \
     && python -m playwright install --with-deps chromium
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000

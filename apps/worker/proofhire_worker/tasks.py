@@ -6,6 +6,7 @@ This module imports every task subpackage so Dramatiq discovers all actors.
 
 import dramatiq
 from proofhire_api.config import get_settings
+from proofhire_api.error_monitoring import configure_error_monitoring
 from proofhire_api.telemetry import configure_tracing
 
 # Must run before the actor-declaring imports below: dramatiq.actor() reads the
@@ -17,6 +18,9 @@ import proofhire_worker.broker  # noqa: F401
 from proofhire_worker import ingestion, intelligence, render  # noqa: F401
 
 configure_tracing("proofhire-worker", get_settings().otel_exporter_otlp_endpoint)
+configure_error_monitoring(
+    get_settings().sentry_dsn, environment=get_settings().environment, service="proofhire-worker"
+)
 
 
 @dramatiq.actor

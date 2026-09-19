@@ -1,0 +1,103 @@
+{
+  "title": "ProofHire — pipeline operations",
+  "uid": "proofhire-ops",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "pg", "type": "datasource", "query": "grafana-postgresql-datasource", "label": "Postgres (generation_runs)" },
+      { "name": "traces", "type": "datasource", "query": "tempo", "label": "Traces (OTLP)" },
+      { "name": "logs", "type": "datasource", "query": "loki", "label": "Logs (structured JSON)" },
+      { "name": "redis", "type": "datasource", "query": "redis-datasource", "label": "Redis (queues)" }
+    ]
+  },
+  "panels": [
+    { "type": "row", "title": "Success rate", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
+    {
+      "type": "stat", "title": "Generation success rate (24h)",
+      "datasource": { "uid": "${pg}" },
+      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 5 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 0.9 }, { "color": "green", "value": 0.98 } ] } } },
+      "targets": [ { "rawSql": "SELECT count(*) FILTER (WHERE status = 'completed')::float / NULLIF(count(*), 0) AS success_rate FROM generation_runs WHERE created_at > now() - interval '24 hours'", "format": "table" } ]
+    },
+    {
+      "type": "timeseries", "title": "Pipeline stage errors (span status = error)",
+      "datasource": { "uid": "${traces}" },
+      "gridPos": { "x": 6, "y": 1, "w": 12, "h": 5 },
+      "targets": [ { "queryType": "traceql", "query": "{ status = error && name =~ \"repository_sync|evidence_extraction|job_analysis|coverage_computation|generation|document_export\" } | rate() by (name)" } ]
+    },
+    {
+      "type": "stat", "title": "Secrets kept from LLM (24h)",
+      "description": "secret_scan_flagged events. A non-zero value is the scanner working, not an incident.",
+      "datasource": { "uid": "${logs}" },
+      "gridPos": { "x": 18, "y": 1, "w": 6, "h": 5 },
+      "targets": [ { "expr": "sum(count_over_time({service=\"proofhire-worker\"} | json | message=\"secret_scan_flagged\" [24h]))" } ]
+    },
+
+    { "type": "row", "title": "Latency", "gridPos": { "x": 0, "y": 6, "w": 24, "h": 1 } },
+    {
+      "type": "timeseries", "title": "Stage duration p95 (spans)",
+      "datasource": { "uid": "${traces}" },
+      "gridPos": { "x": 0, "y": 7, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [ { "queryType": "traceql", "query": "{ name =~ \"repository_sync|evidence_extraction|job_analysis|coverage_computation|generation|document_export\" } | quantile_over_time(duration, 0.95) by (name)" } ]
+    },
+    {
+      "type": "timeseries", "title": "Generation latency p50 / p95 (generation_runs)",
+      "datasource": { "uid": "${pg}" },
+      "gridPos": { "x": 12, "y": 7, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [ { "rawSql": "SELECT $__timeGroupAlias(created_at, '1h'), percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS p50, percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95 FROM generation_runs WHERE $__timeFilter(created_at) AND latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1", "format": "time_series" } ]
+    },
+
+    { "type": "row", "title": "Cost", "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 } },
+    {
+      "type": "timeseries", "title": "Estimated LLM spend per day (USD)",
+      "datasource": { "uid": "${pg}" },
+      "gridPos": { "x": 0, "y": 15, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } },
+      "targets": [ { "rawSql": "SELECT $__timeGroupAlias(created_at, '1d'), sum(estimated_cost) AS spend FROM generation_runs WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1", "format": "time_series" } ]
+    },
+    {
+      "type": "stat", "title": "Cost per application (24h avg)",
+      "datasource": { "uid": "${pg}" },
+      "gridPos": { "x": 8, "y": 15, "w": 4, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 4 } },
+      "targets": [ { "rawSql": "SELECT avg(estimated_cost) FROM generation_runs WHERE created_at > now() - interval '24 hours'", "format": "table" } ]
+    },
+    {
+      "type": "timeseries", "title": "LLM tokens by task (llm_call_completed)",
+      "datasource": { "uid": "${logs}" },
+      "gridPos": { "x": 12, "y": 15, "w": 6, "h": 7 },
+      "targets": [ { "expr": "sum by (task) (sum_over_time({service=~\"proofhire-.*\"} | json | message=\"llm_call_completed\" | unwrap input_tokens [5m]))" } ]
+    },
+    {
+      "type": "timeseries", "title": "Provider retries by error type (llm_call_retrying)",
+      "description": "Rising rate = rate limiting or provider instability; the early signal for a spend cap or provider switch.",
+      "datasource": { "uid": "${logs}" },
+      "gridPos": { "x": 18, "y": 15, "w": 6, "h": 7 },
+      "targets": [ { "expr": "sum by (provider, error_type) (count_over_time({service=\"proofhire-worker\"} | json | message=\"llm_call_retrying\" [5m]))" } ]
+    },
+
+    { "type": "row", "title": "Backlog", "gridPos": { "x": 0, "y": 22, "w": 24, "h": 1 } },
+    {
+      "type": "timeseries", "title": "Dramatiq queue depth",
+      "datasource": { "uid": "${redis}" },
+      "gridPos": { "x": 0, "y": 23, "w": 12, "h": 7 },
+      "targets": [
+        { "command": "llen", "keyName": "dramatiq:ingest", "refId": "ingest" },
+        { "command": "llen", "keyName": "dramatiq:ai", "refId": "ai" },
+        { "command": "llen", "keyName": "dramatiq:render", "refId": "render" }
+      ]
+    },
+    {
+      "type": "stat", "title": "Incremental-sync reduction (24h)",
+      "description": "Syncs that did no LLM work because nothing changed, as a fraction of all syncs.",
+      "datasource": { "uid": "${logs}" },
+      "gridPos": { "x": 12, "y": 23, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [ { "expr": "sum(count_over_time({service=\"proofhire-worker\"} | json | message=\"extraction_skipped_no_changes\" [24h])) / sum(count_over_time({service=\"proofhire-worker\"} | json | message=~\"extraction_skipped_no_changes|llm_call_completed\" | task=\"evidence_extract\" [24h]))" } ]
+    }
+  ]
+}
