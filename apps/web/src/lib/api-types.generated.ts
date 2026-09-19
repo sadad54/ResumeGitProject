@@ -588,6 +588,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Job Endpoint
+         * @description Request cancellation of the job's running pipeline (checklist §12.7).
+         *
+         *     Cooperative: sets a flag the worker checks between LLM calls, so it takes
+         *     effect within one call rather than instantly. 202 because the cancel is
+         *     requested, not yet observed; the job's status becomes `cancelled` when
+         *     the worker sees the flag, and a job that isn't running just clears it.
+         */
+        post: operations["cancel_job_endpoint_api_v1_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/{job_id}/coverage": {
         parameters: {
             query?: never;
@@ -1149,7 +1174,7 @@ export interface components {
          * GenerationRunStatus
          * @enum {string}
          */
-        GenerationRunStatus: "queued" | "running" | "succeeded" | "failed";
+        GenerationRunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /** GraphEdge */
         GraphEdge: {
             /**
@@ -2534,6 +2559,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyzeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_job_endpoint_api_v1_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */

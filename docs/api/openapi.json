@@ -888,7 +888,8 @@
           "queued",
           "running",
           "succeeded",
-          "failed"
+          "failed",
+          "cancelled"
         ],
         "title": "GenerationRunStatus",
         "type": "string"
@@ -3559,6 +3560,59 @@
           }
         ],
         "summary": "Analyze Job Endpoint",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "description": "Request cancellation of the job's running pipeline (checklist \u00a712.7).\n\nCooperative: sets a flag the worker checks between LLM calls, so it takes\neffect within one call rather than instantly. 202 because the cancel is\nrequested, not yet observed; the job's status becomes `cancelled` when\nthe worker sees the flag, and a job that isn't running just clears it.",
+        "operationId": "cancel_job_endpoint_api_v1_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Cancel Job Endpoint Api V1 Jobs  Job Id  Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Job Endpoint",
         "tags": [
           "jobs"
         ]

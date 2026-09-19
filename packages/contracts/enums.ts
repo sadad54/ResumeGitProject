@@ -115,6 +115,7 @@ export enum GenerationRunStatus {
   Running = "running",
   Succeeded = "succeeded",
   Failed = "failed",
+  Cancelled = "cancelled",
 }
 
 export enum SyncStatus {

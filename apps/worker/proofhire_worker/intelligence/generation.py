@@ -67,6 +67,7 @@ from proofhire_prompts.resume_write_v1 import (
 )
 from sqlalchemy import select
 
+from proofhire_worker.cancellation import JobCancelled, clear_cancel, raise_if_cancelled
 from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.intelligence.claim_finalizer import finalize_claim_status
@@ -379,6 +380,7 @@ async def _generate(job_id_str: str, mode_str: str, document_type_str: str) -> N
 
         usages: list = []
         try:
+            await raise_if_cancelled(job_id_str)
             positioning, positioning_result = await compute_positioning(session, job)
             usages.append(positioning_result.usage)
             _log_llm_usage("position", "position:v1", positioning_result, job_id_str)
@@ -403,6 +405,10 @@ async def _generate(job_id_str: str, mode_str: str, document_type_str: str) -> N
 
             await publish_event(job_id_str, RunEventName.GENERATION_VERIFYING, {})
 
+            # Between positioning and the writer: the two expensive stages.
+            # The writer's own verify/repair loop is bounded (MAX_REPAIR_ATTEMPTS)
+            # so it is allowed to finish once started.
+            await raise_if_cancelled(job_id_str)
             if document_type == DocumentType.RESUME:
                 content, finalized_claims = await _generate_resume(
                     provider, mode, positioning, profile_facts, evidence_items, job_id_str, usages
@@ -463,6 +469,12 @@ async def _generate(job_id_str: str, mode_str: str, document_type_str: str) -> N
                 {"document_id": str(document.id), "generation_run_id": str(generation_run.id)},
             )
 
+        except JobCancelled:
+            generation_run.status = GenerationRunStatus.CANCELLED
+            await session.commit()
+            await clear_cancel(job_id_str)
+            logger.info("generation_cancelled", extra={"job_id": job_id_str})
+            await publish_event(job_id_str, RunEventName.GENERATION_FAILED, {"job_id": job_id_str, "cancelled": True})
         except Exception:
             generation_run.status = GenerationRunStatus.FAILED
             await session.commit()

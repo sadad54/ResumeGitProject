@@ -114,6 +114,7 @@ class GenerationRunStatus(StrEnum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class SyncStatus(StrEnum):

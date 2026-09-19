@@ -165,7 +165,21 @@ export function JobWorkspace({ initialJobId = "" }: { initialJobId?: string }) {
             <Button onClick={() => setRevision((v) => v + 1)}>
               Refresh status
             </Button>
-            {["captured", "failed", "coverage_failed"].includes(job.status) && (
+            {["analyzing", "matching"].includes(job.status) && (
+              <Button
+                onClick={() =>
+                  void api
+                    .POST("/api/v1/jobs/{job_id}/cancel", {
+                      params: { path: { job_id: job.id } },
+                    })
+                    .then(() => setRevision((v) => v + 1))
+                    .catch(() => setError("Could not cancel the job."))
+                }
+              >
+                Cancel analysis
+              </Button>
+            )}
+            {["captured", "failed", "coverage_failed", "cancelled"].includes(job.status) && (
               <Button disabled={busy} onClick={() => void analyze(job.id)}>
                 {job.status === "captured"
                   ? "Analyze captured job"

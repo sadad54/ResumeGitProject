@@ -68,3 +68,56 @@ test('manifest remains minimal and has no page-wide injection', () => {
   assert.equal(manifest.host_permissions, undefined);
   assert.equal(manifest.content_scripts, undefined);
 });
+
+test('popup "capture active page" uses the active tab and only accepts internal senders', async () => {
+  const { listeners, store, tabs } = setup();
+  const external = await new Promise(resolve => {
+    const r = listeners.internal({ type: 'capture-active' }, { id: 'someone-else' }, resolve);
+    if (r === undefined) resolve('ignored');
+  });
+  assert.equal(external, 'ignored');
+  assert.equal(tabs.length, 0);
+
+  const reply = await new Promise(resolve => listeners.internal({ type: 'capture-active' }, { id: 'a'.repeat(32) }, resolve));
+  assert.equal(reply.ok, true); // cross-realm object, so compare the field
+  const [entry] = Object.values(store);
+  assert.equal(entry.page_url, 'https://example.com/job');
+  assert.equal(entry.title, 'Backend Engineer');
+  assert.equal(entry.selected_text, '');
+  assert.equal(tabs.length, 1);
+});
+
+test('capture bounds text, url and title and rejects non-http page urls', async () => {
+  const { listeners, store } = setup();
+  listeners.click({ selectionText: 'x'.repeat(70000), pageUrl: 'javascript:alert(1)' }, { title: 't'.repeat(600) });
+  await tick();
+  const [entry] = Object.values(store);
+  assert.equal(entry.selected_text.length, 60000);
+  assert.equal(entry.page_url, null);
+  assert.equal(entry.title.length, 500);
+});
+
+test('a new capture sweeps expired handoffs from session storage', async () => {
+  const { listeners, store } = setup();
+  store['stale'] = { selected_text: 'old', expires: Date.now() - 1000 };
+  store['fresh'] = { selected_text: 'new', expires: Date.now() + 100000 };
+  listeners.click({ selectionText: 'now', pageUrl: 'https://example.com/a' }, { title: 'r' });
+  await tick();
+  assert.equal(store['stale'], undefined);
+  assert.ok(store['fresh']);
+});
+
+test('malformed capture ids and unknown message types are ignored', () => {
+  const { listeners } = setup();
+  const sender = { url: 'http://localhost:3000/capture' };
+  for (const message of [
+    { type: 'read-capture', capture_id: 'not-a-uuid' },
+    { type: 'read-capture', capture_id: '../../etc' },
+    { type: 'delete-everything', capture_id: webcrypto.randomUUID() },
+    null,
+  ]) {
+    let called = false;
+    const result = listeners.external(message, sender, () => { called = true; });
+    assert.equal(result, undefined); assert.equal(called, false);
+  }
+});

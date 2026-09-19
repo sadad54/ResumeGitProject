@@ -24,6 +24,67 @@ _FRAMEWORK_HINTS: dict[str, list[str]] = {
 }
 
 
+# ML / model infrastructure (checklist §1.5). Two signals, both deterministic:
+# dependency names that only appear in ML codebases, and files whose existence
+# means a model was trained, tracked, or served. Either alone can be a false
+# positive (a data-analysis notebook imports pandas); the extractor reports
+# what it saw and lets confidence scoring weigh it, rather than deciding
+# "this is an ML repo" here.
+ML_DEPENDENCY_SIGNALS: dict[str, str] = {
+    # training / modelling
+    "torch": "deep_learning", "pytorch": "deep_learning", "tensorflow": "deep_learning",
+    "keras": "deep_learning", "jax": "deep_learning", "flax": "deep_learning",
+    "pytorch-lightning": "deep_learning", "lightning": "deep_learning",
+    "transformers": "llm_nlp", "sentence-transformers": "llm_nlp", "peft": "llm_nlp",
+    "trl": "llm_nlp", "vllm": "llm_serving", "openai": "llm_api", "anthropic": "llm_api",
+    "langchain": "llm_orchestration", "llama-index": "llm_orchestration", "llama_index": "llm_orchestration",
+    "scikit-learn": "classical_ml", "sklearn": "classical_ml", "xgboost": "classical_ml",
+    "lightgbm": "classical_ml", "catboost": "classical_ml", "statsmodels": "classical_ml",
+    # experiment tracking / registry / pipelines
+    "mlflow": "experiment_tracking", "wandb": "experiment_tracking", "neptune": "experiment_tracking",
+    "dvc": "data_versioning", "kubeflow": "ml_pipelines", "kfp": "ml_pipelines",
+    "bentoml": "model_serving", "torchserve": "model_serving", "onnxruntime": "model_serving",
+    "triton": "model_serving", "ray": "distributed_training", "deepspeed": "distributed_training",
+    # vector / retrieval
+    "faiss": "vector_search", "faiss-cpu": "vector_search", "faiss-gpu": "vector_search",
+    "pgvector": "vector_search", "chromadb": "vector_search", "pinecone-client": "vector_search",
+    "qdrant-client": "vector_search", "weaviate-client": "vector_search",
+    # evaluation
+    "evaluate": "ml_evaluation", "ragas": "ml_evaluation", "deepeval": "ml_evaluation",
+}
+
+ML_FILE_SIGNALS: dict[str, str] = {
+    "dvc.yaml": "data_versioning", "dvc.lock": "data_versioning", ".dvc": "data_versioning",
+    "mlflow.yaml": "experiment_tracking", "MLproject": "experiment_tracking",
+    "wandb": "experiment_tracking", "params.yaml": "ml_pipelines",
+    "model_card.md": "model_card", "MODEL_CARD.md": "model_card",
+    "bentofile.yaml": "model_serving", "config.pbtxt": "model_serving",
+}
+ML_MODEL_EXTENSIONS = {".pt", ".pth", ".ckpt", ".safetensors", ".onnx", ".h5", ".keras",
+                       ".pkl", ".joblib", ".tflite", ".pb", ".gguf"}
+
+
+def _ml_signals_from_deps(deps: list[str]) -> dict:
+    found = sorted({ML_DEPENDENCY_SIGNALS[d.lower()] for d in deps if d.lower() in ML_DEPENDENCY_SIGNALS})
+    return {"ml_infrastructure": found} if found else {}
+
+
+def extract_ml_from_path(path: str) -> dict:
+    """Signals from a file's *name*, for artifacts whose content we never read
+    (model weights are binary and excluded from fetch)."""
+    name = path.rsplit("/", 1)[-1]
+    lower = path.lower()
+    signals: set[str] = set()
+    for filename, signal in ML_FILE_SIGNALS.items():
+        if name == filename or f"/{filename}/" in f"/{lower}/" or lower.endswith(f"/{filename.lower()}"):
+            signals.add(signal)
+    if any(name.lower().endswith(ext) for ext in ML_MODEL_EXTENSIONS):
+        signals.add("model_artifact")
+    if any(seg in f"/{lower}" for seg in ("/models/", "/checkpoints/", "/weights/", "/notebooks/", "/experiments/")):
+        signals.add("ml_project_layout")
+    return {"ml_infrastructure": sorted(signals)} if signals else {}
+
+
 def extract_from_package_json(content: str) -> dict:
     try:
         data = json.loads(content)
@@ -34,6 +95,7 @@ def extract_from_package_json(content: str) -> dict:
         "language": "javascript/typescript",
         "dependencies": sorted(deps.keys()),
         "frameworks": sorted(name for name in _FRAMEWORK_HINTS if name in deps),
+        **_ml_signals_from_deps(list(deps)),
     }
 
 
@@ -45,6 +107,7 @@ def extract_from_pyproject_toml(content: str) -> dict:
         "language": "python",
         "dependencies": sorted(set(deps)),
         "frameworks": sorted(name for name in _FRAMEWORK_HINTS if name in {d.lower() for d in deps}),
+        **_ml_signals_from_deps(deps),
     }
 
 
@@ -61,12 +124,19 @@ def extract_from_requirements_txt(content: str) -> dict:
         "language": "python",
         "dependencies": sorted(set(deps)),
         "frameworks": sorted(name for name in _FRAMEWORK_HINTS if name in deps),
+        **_ml_signals_from_deps(deps),
     }
 
 
 def extract_from_dockerfile(content: str) -> dict:
     base_images = re.findall(r"^FROM\s+(\S+)", content, re.MULTILINE | re.IGNORECASE)
-    return {"container": True, "base_images": base_images}
+    out: dict = {"container": True, "base_images": base_images}
+    # A CUDA/PyTorch/TensorFlow base image is as strong an ML-infra signal as
+    # a dependency name, and it's the one that says "trains or serves on GPU".
+    gpu = [b for b in base_images if re.search(r"cuda|nvidia|pytorch|tensorflow|nvcr\.io", b, re.IGNORECASE)]
+    if gpu:
+        out["ml_infrastructure"] = ["gpu_container"]
+    return out
 
 
 def extract_from_ci_config(path: str, content: str) -> dict:
@@ -94,4 +164,4 @@ def extract(path: str, content: str) -> dict:
         return extract_from_dockerfile(content)
     if ".github/workflows/" in path or name in {".gitlab-ci.yml"}:
         return extract_from_ci_config(path, content)
-    return {}
+    return extract_ml_from_path(path)

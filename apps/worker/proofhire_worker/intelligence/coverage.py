@@ -18,6 +18,7 @@ from proofhire_api.models.job import Job
 from proofhire_api.models.requirement import Requirement
 from proofhire_api.repositories.evidence import EvidenceQuery, SQLAlchemyEvidenceRepository
 from proofhire_api.telemetry import traced_stage
+from proofhire_worker.cancellation import clear_cancel, is_cancelled
 from proofhire_prompts.rerank_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
 from sqlalchemy import delete, select
 
@@ -69,6 +70,14 @@ async def _compute_coverage(job_id_str: str) -> None:
         strong = partial = gap = unknown = 0
 
         for requirement in requirements:
+            # Checked before each rerank call: a cancel takes effect within one
+            # LLM call rather than after the whole loop (checklist §12.7).
+            if await is_cancelled(job_id_str):
+                job.status = "cancelled"
+                await session.commit()
+                await clear_cancel(job_id_str)
+                logger.info("coverage_computation_cancelled", extra={"job_id": job_id_str})
+                return
             try:
                 [embedding] = await embedding_provider.embed(
                     [requirement.text], model="text-embedding-3-small"

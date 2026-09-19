@@ -60,11 +60,24 @@ export function ApplicationsBoard() {
   }
 
   async function setStage(id: string, stage: Application["stage"]) {
-    const updated = await apiFetch<Application>(`/api/v1/applications/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ stage }),
-    });
-    setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+    // Optimistic: a stage change is the user's own decision about their own
+    // record, so it's shown immediately and rolled back only if the server
+    // refuses. Waiting on the round trip here made the dropdown feel stuck.
+    const previous = applications.find((a) => a.id === id);
+    setApplications((prev) => prev.map((a) => (a.id === id ? { ...a, stage } : a)));
+    setError(null);
+    try {
+      const updated = await apiFetch<Application>(`/api/v1/applications/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ stage }),
+      });
+      setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+    } catch (err) {
+      if (previous) {
+        setApplications((prev) => prev.map((a) => (a.id === id ? previous : a)));
+      }
+      setError(err instanceof ApiError ? err.message : "Could not update stage.");
+    }
   }
 
   if (!signedIn) {

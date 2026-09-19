@@ -3,6 +3,7 @@ a provider SDK directly (ADR-0005)."""
 
 import os
 
+from proofhire_worker.intelligence.embedding_cache import CachedEmbeddingProvider
 from proofhire_worker.intelligence.llm_provider import LLMProvider
 from proofhire_worker.intelligence.providers.anthropic_provider import AnthropicProvider
 from proofhire_worker.intelligence.providers.mock_provider import MockLLMProvider
@@ -34,6 +35,5 @@ def get_embedding_provider() -> LLMProvider:
     Falls back to the mock provider if no OpenAI key is configured, so local dev
     without any API keys still exercises the full pipeline deterministically."""
     api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        return MockLLMProvider()
-    return OpenAIProvider(api_key)
+    inner: LLMProvider = OpenAIProvider(api_key) if api_key else MockLLMProvider()
+    return CachedEmbeddingProvider(inner)

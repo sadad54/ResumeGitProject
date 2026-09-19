@@ -105,7 +105,7 @@ async def _sync_one_repository(
 
         deterministic_metadata = extract(path, content)
         if deterministic_metadata:
-            for key in ("dependencies", "frameworks", "ci_provider", "base_images"):
+            for key in ("dependencies", "frameworks", "ci_provider", "base_images", "ml_infrastructure"):
                 if key in deterministic_metadata:
                     language_summary.setdefault(key, [])
                     if isinstance(deterministic_metadata[key], list):

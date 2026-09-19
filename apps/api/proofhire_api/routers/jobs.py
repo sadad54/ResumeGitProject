@@ -116,6 +116,29 @@ async def get_job(
     return job
 
 
+@router.post("/{job_id}/cancel", status_code=status.HTTP_202_ACCEPTED)
+async def cancel_job_endpoint(
+    job_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Request cancellation of the job's running pipeline (checklist §12.7).
+
+    Cooperative: sets a flag the worker checks between LLM calls, so it takes
+    effect within one call rather than instantly. 202 because the cancel is
+    requested, not yet observed; the job's status becomes `cancelled` when
+    the worker sees the flag, and a job that isn't running just clears it.
+    """
+    job = await db.get(Job, job_id)
+    if job is None or job.user_id != current_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
+
+    from proofhire_worker.cancellation import request_cancel
+
+    await request_cancel(str(job.id))
+    return {"status": "cancel_requested"}
+
+
 @router.post(
     "/{job_id}/analyze",
     response_model=AnalyzeResponse,
