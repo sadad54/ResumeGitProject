@@ -6,6 +6,8 @@ truth the deterministic fact guard checks generated claims against — so
 accuracy here matters more than completeness.
 """
 
+from proofhire_prompts.untrusted import BOUNDARY_RULE, wrap_untrusted
+
 PROMPT_VERSION = "resume_extract:v1"
 
 SYSTEM_PROMPT = """You are extracting structured facts from a resume's raw \
@@ -21,8 +23,9 @@ correct formatting.
 otherwise leave it as an empty string rather than guessing.
 - Do not invent employers, titles, or institutions that aren't in the text.
 - List employment and education in the order they appear in the resume.
+- """ + BOUNDARY_RULE + """
 """
 
 
 def build_user_message(resume_text: str) -> str:
-    return f"Resume text:\n\n{resume_text}"
+    return f"Resume text:\n\n{wrap_untrusted(resume_text)}"

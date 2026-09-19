@@ -5,6 +5,8 @@ company, seniority, and a list of individual requirements with category,
 required/preferred distinction, and importance.
 """
 
+from proofhire_prompts.untrusted import BOUNDARY_RULE, wrap_untrusted
+
 PROMPT_VERSION = "jd_extract:v1"
 
 SYSTEM_PROMPT = """You are a precise job description analyzer. Given the raw \
@@ -32,8 +34,9 @@ to the role, based on emphasis/repetition/placement in the posting — not just 
 whether it's required.
 - `category` must be one of: skill, experience, responsibility, domain, \
 education, tooling, soft_skill, seniority.
+- """ + BOUNDARY_RULE + """
 """
 
 
 def build_user_message(source_text: str) -> str:
-    return f"Job posting text:\n\n{source_text}"
+    return f"Job posting text:\n\n{wrap_untrusted(source_text)}"
