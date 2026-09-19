@@ -27,6 +27,7 @@ ENV PATH="/venv/bin:$PATH" PYTHONUNBUFFERED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playw
     REDIS_URL=redis://127.0.0.1:6379/0 LOCAL_STORAGE_ROOT=/data/storage
 RUN /venv/bin/python -m playwright install --with-deps chromium \
     && /venv/bin/pip uninstall -y pip setuptools \
+    && rm -rf /usr/local/lib/python3.13/site-packages/pip* /usr/local/lib/python3.13/site-packages/setuptools* \
     && rm -rf /root/.cache
 COPY apps/api/alembic apps/api/alembic
 COPY apps/api/alembic.ini apps/api/alembic.ini
