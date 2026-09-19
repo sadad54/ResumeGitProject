@@ -9,6 +9,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
  */
 const ROUTES = ["/", "/evidence", "/jobs", "/documents", "/applications", "/settings"];
 
+// One measurement per build is enough; the mobile project would duplicate it.
+test.skip(({ isMobile }) => !!isMobile, "measured once, on desktop");
+
 test("initial JS payload per route", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("proofhire.access_token", "fixture-token"));
   await page.route("**/api/v1/**", (route) => route.fulfill({ json: [] }));

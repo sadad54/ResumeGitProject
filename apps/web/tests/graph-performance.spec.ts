@@ -45,6 +45,10 @@ function syntheticGraph(nodeCount: number) {
   return { nodes, edges, job_id: "job1", job_status: "ready", truncated: false, evidence_limit: nodeCount };
 }
 
+// Desktop only: on mobile the constellation deliberately renders the accessible
+// table instead of the graph, so there are no nodes to measure.
+test.skip(({ isMobile }) => !!isMobile, "graph view is desktop-only");
+
 const results: Record<string, unknown>[] = [];
 
 test.describe.configure({ mode: "serial" });
