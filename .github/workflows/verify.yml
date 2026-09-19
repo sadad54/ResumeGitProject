@@ -1,0 +1,78 @@
+name: Verify ProofHire
+on:
+  pull_request:
+  push:
+    branches: [master]
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: proofhire
+          POSTGRES_PASSWORD: proofhire
+          POSTGRES_DB: proofhire
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U proofhire" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    env:
+      DATABASE_URL: postgresql+asyncpg://proofhire:proofhire@localhost:5432/proofhire
+      REDIS_URL: redis://localhost:6379/0
+      LLM_DEFAULT_PROVIDER: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -e packages/contracts -e packages/prompts -e packages/evals -e 'apps/api[dev]' -e 'apps/worker[dev]' aiosqlite
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m ruff check --select E9,F63,F7,F82 apps packages tests
+      - run: python -m alembic -c alembic.ini upgrade head
+        working-directory: apps/api
+      - run: python -m pytest -c pytest.ini tests/phase7 apps/api/tests apps/worker/tests packages/evals/tests
+      - name: Smoke scoring (synthetic; not the release benchmark)
+        run: python -m proofhire_evals.cli score --dataset packages/evals/fixtures/smoke-gold.jsonl --runs packages/evals/fixtures/smoke-runs.jsonl --output reports/eval-smoke.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-smoke
+          path: reports/
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --workspace apps/web
+      - run: npm run typecheck --workspace apps/web
+      - run: npm run build --workspace apps/web
+      - run: node --test apps/extension/tests/*.test.mjs
+      - run: npm exec --workspace apps/web -- playwright install --with-deps chromium
+      - run: npm exec --workspace apps/web -- playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-results
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+  containers:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f infra/docker/Dockerfile.api -t proofhire-api .
+      - run: docker build -f infra/docker/Dockerfile.web -t proofhire-web .

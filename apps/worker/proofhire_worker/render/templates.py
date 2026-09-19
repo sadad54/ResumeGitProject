@@ -1,6 +1,6 @@
 """Jake-inspired ATS Minimal template (PRD §21). Single-column, no images, no
-tables — every requirement the PRD lists for ATS-safety. Technical Dense and
-Modern Editorial templates are deferred until this one is proven (build plan).
+tables. Technical Dense and Modern Editorial preserve the same single-column
+content structure with different typography and spacing.
 
 Not a reproduction of any specific third-party template's markup/CSS — an
 original single-column layout inspired by common ATS-safe resume conventions
@@ -32,7 +32,16 @@ p { margin: 6px 0; }
 """
 
 
-def render_resume_html(content: dict, contact_email: str) -> str:
+TEMPLATE_STYLES = {
+    "ats_minimal": "",
+    "technical_dense": "body{font-family:Arial,sans-serif;font-size:10pt;line-height:1.3;padding:28px 40px} h2{margin-top:10px} li{margin-bottom:1px}",
+    "modern_editorial": "body{font-family:Arial,sans-serif;line-height:1.5;padding:40px 48px} h2{color:#165b61;border-color:#165b61;letter-spacing:.08em} h1{font-family:Georgia,serif}",
+}
+
+
+def render_resume_html(content: dict, contact_email: str, template_id: str = "ats_minimal") -> str:
+    if template_id not in TEMPLATE_STYLES:
+        raise ValueError("Unknown resume template")
     summary = _esc(content.get("summary", ""))
     skills = ", ".join(_esc(s) for s in content.get("skills", []))
 
@@ -48,7 +57,7 @@ def render_resume_html(content: dict, contact_email: str) -> str:
         """
 
     return f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>{_BASE_STYLE}</style></head>
+<html><head><meta charset="utf-8"><style>{_BASE_STYLE}{TEMPLATE_STYLES[template_id]}</style></head>
 <body>
 <h1>Resume</h1>
 <div class="contact">{_esc(contact_email)}</div>
@@ -72,3 +81,4 @@ def render_cover_letter_html(content: dict, contact_email: str) -> str:
 <div class="contact">{_esc(contact_email)}</div>
 {paragraphs}
 </body></html>"""
+

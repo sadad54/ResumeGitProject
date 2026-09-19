@@ -1,0 +1,10 @@
+FROM python:3.13-slim
+WORKDIR /app
+COPY packages packages
+COPY apps/api apps/api
+COPY apps/worker apps/worker
+RUN pip install --no-cache-dir -e packages/contracts -e packages/prompts -e packages/evals -e apps/api -e apps/worker \
+    && python -m playwright install --with-deps chromium
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8000
+CMD ["uvicorn", "proofhire_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

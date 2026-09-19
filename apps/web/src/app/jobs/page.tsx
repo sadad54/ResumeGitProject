@@ -1,17 +1,28 @@
 import { AppShell } from "@/components/app-shell";
 import { JobWorkspace } from "@/components/job-workspace";
 
-export default function JobsPage() {
+export default async function JobsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ job?: string }>;
+}) {
+  const params = await searchParams;
   return (
     <AppShell>
-      <h1 className="text-xl font-semibold">Jobs</h1>
-      <p className="mt-2 text-sm text-neutral-500">
-        Coverage matrix and positioning land in Phase 4-5 — this is JD capture
-        and requirement extraction.
-      </p>
-      <div className="mt-4">
-        <JobWorkspace />
+      <div className="ph-workspace-heading">
+        <div>
+          <span className="ph-eyebrow">The next chapter</span>
+          <h1 className="text-3xl font-semibold mt-2">
+            Find your fit<span className="ph-accent">.</span>
+          </h1>
+          <p className="mt-2">
+            A job description meets the work you can prove.
+          </p>
+        </div>
       </div>
+      <JobWorkspace
+        initialJobId={typeof params.job === "string" ? params.job : ""}
+      />
     </AppShell>
   );
 }

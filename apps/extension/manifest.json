@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "ProofHire — Capture a job",
+  "version": "0.1.0",
+  "description": "Send a selected job description to your evidence-grounded career workspace.",
+  "permissions": ["contextMenus", "activeTab", "storage"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "Capture a job with ProofHire" },
+  "externally_connectable": { "matches": ["http://localhost/*", "http://127.0.0.1/*"] }
+}

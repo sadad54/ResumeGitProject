@@ -1,0 +1,1 @@
+{"id": "fixture", "requirements": ["rest"], "ranked_evidence": {"rest": ["api"]}, "claims": 1, "unsupported_claims": 0, "immutable_facts": 1, "preserved_facts": 1, "parse_back_attempts": 1, "parse_back_successes": 1, "secret_leaks": 0, "input_tokens": 20, "output_tokens": 10, "cost_usd": 0.01, "latency_ms": 100}

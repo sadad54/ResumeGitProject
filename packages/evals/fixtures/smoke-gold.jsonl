@@ -1,0 +1,1 @@
+{"id": "fixture", "family": "backend", "requirements": ["rest"], "evidence_matches": {"rest": {"api": 2}}, "review": {"status": "synthetic_smoke"}}

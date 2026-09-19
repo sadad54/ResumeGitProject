@@ -22,11 +22,6 @@ export function ResumeUpload() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!getAccessToken()) return;
-    void loadFacts();
-  }, []);
-
   async function loadFacts() {
     try {
       const result = await apiFetch<ProfileFact[]>("/api/v1/profile/facts");
@@ -35,6 +30,13 @@ export function ResumeUpload() {
       // silent — page still usable without facts loaded
     }
   }
+
+  useEffect(() => {
+    if (!getAccessToken()) return;
+    void loadFacts();
+  }, []);
+
+
 
   async function upload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -100,3 +102,4 @@ export function ResumeUpload() {
     </div>
   );
 }
+

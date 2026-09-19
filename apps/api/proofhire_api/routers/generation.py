@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -16,10 +17,10 @@ from proofhire_api.models.repository import Repository
 from proofhire_api.models.user import User
 from proofhire_api.schemas.generation import (
     ExportResponse,
-    GenerateRequest,
-    GenerateResponse,
     GeneratedClaimPublic,
     GeneratedDocumentPublic,
+    GenerateRequest,
+    GenerateResponse,
     GenerationRunPublic,
     PositioningResponse,
 )
@@ -47,7 +48,9 @@ async def get_positioning(
     return PositioningResponse(**output.model_dump())
 
 
-@router.post("/jobs/{job_id}/generate", response_model=GenerateResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/jobs/{job_id}/generate", response_model=GenerateResponse, status_code=status.HTTP_202_ACCEPTED
+)
 async def trigger_generate(
     job_id: uuid.UUID,
     body: GenerateRequest,
@@ -78,6 +81,24 @@ async def get_generation_run(
     return run
 
 
+@router.get("/documents", response_model=list[GeneratedDocumentPublic])
+async def list_documents(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[GeneratedDocument]:
+    return list(
+        await db.scalars(
+            select(GeneratedDocument)
+            .join(Job)
+            .where(
+                Job.user_id == current_user.id,
+            )
+            .order_by(GeneratedDocument.id.desc())
+            .limit(100)
+        )
+    )
+
+
 @router.get("/documents/{document_id}", response_model=GeneratedDocumentPublic)
 async def get_document(
     document_id: uuid.UUID,
@@ -96,6 +117,7 @@ async def get_document(
 @router.post("/documents/{document_id}/export", response_model=ExportResponse)
 async def export_document_endpoint(
     document_id: uuid.UUID,
+    template: Literal["ats_minimal", "technical_dense", "modern_editorial"] | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ExportResponse:
@@ -111,7 +133,7 @@ async def export_document_endpoint(
     from proofhire_worker.render.export import ParseBackValidationError, export_document
 
     try:
-        document = await export_document(db, document, current_user.email)
+        document = await export_document(db, document, current_user.email, template)
     except ParseBackValidationError as exc:
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -134,7 +156,9 @@ async def download_document_pdf(
     if job is None or job.user_id != current_user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
 
-    return FileResponse(document.pdf_ref, media_type="application/pdf", filename=f"resume-{document.id}.pdf")
+    return FileResponse(
+        document.pdf_ref, media_type="application/pdf", filename=f"resume-{document.id}.pdf"
+    )
 
 
 @router.get("/documents/{document_id}/claims", response_model=list[GeneratedClaimPublic])

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiBaseUrl, apiFetch, ApiError, getAccessToken } from "@/lib/api";
+import { openRunEvents } from "@/lib/events";
+import { apiFetch, ApiError, getAccessToken } from "@/lib/api";
 
 type Repository = {
   id: string;
@@ -28,6 +29,19 @@ export function GitHubPanel() {
   const [runId, setRunId] = useState<string | null>(null);
   const [progress, setProgress] = useState<string[]>([]);
 
+  async function loadRepositories() {
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await apiFetch<Repository[]>("/api/v1/github/repositories");
+      setRepos(list);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load repositories");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     setAuthed(!!getAccessToken());
   }, []);
@@ -39,17 +53,14 @@ export function GitHubPanel() {
 
   useEffect(() => {
     if (!runId) return;
-    const token = getAccessToken();
-    const source = new EventSource(
-      `${apiBaseUrl()}/api/v1/events/runs/${runId}?access_token=${token}`,
-    );
+    const source = openRunEvents(runId);
     source.addEventListener("message", (e) => {
-      setProgress((prev) => [...prev, e.data]);
+      setProgress((prev) => [...prev, (e as MessageEvent).data]);
     });
     // Named-event listeners for the specific event types the worker publishes.
     for (const name of ["github.sync.started", "github.repo.analyzing", "github.repo.completed"]) {
-      source.addEventListener(name, (e: MessageEvent) => {
-        setProgress((prev) => [...prev, `${name}: ${e.data}`]);
+      source.addEventListener(name, (e) => {
+        setProgress((prev) => [...prev, `${name}: ${(e as MessageEvent).data}`]);
       });
     }
     return () => source.close();
@@ -67,18 +78,7 @@ export function GitHubPanel() {
     }
   }
 
-  async function loadRepositories() {
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await apiFetch<Repository[]>("/api/v1/github/repositories");
-      setRepos(list);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load repositories");
-    } finally {
-      setLoading(false);
-    }
-  }
+
 
   async function refreshFromGitHub() {
     setLoading(true);
@@ -175,3 +175,4 @@ export function GitHubPanel() {
     </div>
   );
 }
+

@@ -27,11 +27,6 @@ export function ApplicationsBoard() {
   const [jobs, setJobs] = useState<Record<string, Job>>({});
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!getAccessToken()) return;
-    void load();
-  }, []);
-
   async function load() {
     try {
       const [apps, jobList] = await Promise.all([
@@ -44,6 +39,13 @@ export function ApplicationsBoard() {
       setError(err instanceof ApiError ? err.message : "Failed to load applications");
     }
   }
+
+  useEffect(() => {
+    if (!getAccessToken()) return;
+    void load();
+  }, []);
+
+
 
   async function trackJob(jobId: string) {
     const created = await apiFetch<Application>("/api/v1/applications", {
@@ -119,3 +121,4 @@ export function ApplicationsBoard() {
     </div>
   );
 }
+
