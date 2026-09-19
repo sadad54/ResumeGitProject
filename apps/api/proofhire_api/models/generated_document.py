@@ -32,3 +32,6 @@ class GeneratedDocument(Base):
     html_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     pdf_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     plaintext_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Measured from the rendered PDF at export time, so the UI can warn about a
+    # resume that has quietly spilled onto a second page.
+    page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)

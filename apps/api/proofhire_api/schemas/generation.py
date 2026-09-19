@@ -60,6 +60,8 @@ class GeneratedDocumentPublic(BaseModel):
 class ExportResponse(BaseModel):
     document_id: uuid.UUID
     pdf_available: bool
+    page_count: int | None = None
+    overflowed: bool = False
 
 
 class GeneratedClaimPublic(BaseModel):

@@ -11,8 +11,12 @@ from proofhire_contracts import ClaimVerificationStatus, DocumentType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proofhire_worker.render.parse_back import extract_pdf_text, validate_parse_back
-from proofhire_worker.render.pdf_renderer import render_html_to_pdf
+from proofhire_worker.render.parse_back import (
+    count_pdf_pages,
+    extract_pdf_text,
+    validate_parse_back,
+)
+from proofhire_worker.render.pdf_renderer import DEFAULT_PAGE_SIZE, PageSize, render_html_to_pdf
 from proofhire_worker.render.storage import save_bytes
 from proofhire_worker.render.templates import render_cover_letter_html, render_resume_html
 
@@ -31,6 +35,7 @@ async def export_document(
     document: GeneratedDocument,
     contact_email: str,
     template_id: str | None = None,
+    page_size: PageSize = DEFAULT_PAGE_SIZE,
 ) -> GeneratedDocument:
     chosen_template = (
         (template_id or document.template_id)
@@ -54,13 +59,19 @@ async def export_document(
     )
     required_texts += [c.claim_text for c in supported_claims]
 
-    pdf_bytes = await render_html_to_pdf(html_content)
+    pdf_bytes = await render_html_to_pdf(html_content, page_size)
 
     success, missing = validate_parse_back(pdf_bytes, required_texts)
     if not success:
         # Fail closed: an export that can't be verified to contain what it
         # was supposed to contain is not returned to the user (PRD §21).
         raise ParseBackValidationError(missing)
+
+    # Overflow is recorded rather than raised: unlike missing content, a
+    # multi-page resume is a legitimate document the user may well want. They
+    # just need to be told, so the UI can surface it instead of shipping a
+    # silently-three-page resume.
+    document.page_count = count_pdf_pages(pdf_bytes)
 
     plaintext = extract_pdf_text(pdf_bytes)
 

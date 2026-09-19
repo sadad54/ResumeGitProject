@@ -3,6 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+from proofhire_contracts import DocumentType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,6 +127,7 @@ async def get_document(
 async def export_document_endpoint(
     document_id: uuid.UUID,
     template: Literal["ats_minimal", "technical_dense", "modern_editorial"] | None = None,
+    page_size: Literal["Letter", "A4"] = "Letter",
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ExportResponse:
@@ -141,14 +143,23 @@ async def export_document_endpoint(
     from proofhire_worker.render.export import ParseBackValidationError, export_document
 
     try:
-        document = await export_document(db, document, current_user.email, template)
+        document = await export_document(
+            db, document, current_user.email, template, page_size
+        )
     except ParseBackValidationError as exc:
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Export failed parse-back validation — missing content: {exc.missing}",
         ) from exc
 
-    return ExportResponse(document_id=document.id, pdf_available=document.pdf_ref is not None)
+    return ExportResponse(
+        document_id=document.id,
+        pdf_available=document.pdf_ref is not None,
+        page_count=document.page_count,
+        # A resume is expected to be one page; report overflow rather than
+        # blocking it, since a longer document is sometimes what the user wants.
+        overflowed=(document.type == DocumentType.RESUME and (document.page_count or 1) > 1),
+    )
 
 
 @router.get("/documents/{document_id}/pdf")

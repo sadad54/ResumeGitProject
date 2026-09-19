@@ -17,6 +17,7 @@ def _esc(text: str) -> str:
 
 
 _BASE_STYLE = """
+@page { margin: 0; }
 body { font-family: Georgia, 'Times New Roman', serif; font-size: 10.5pt;
        color: #111; margin: 0; padding: 36px 48px; line-height: 1.4; }
 h1 { font-size: 16pt; margin: 0 0 2px 0; font-weight: bold; }
@@ -29,6 +30,18 @@ ul { margin: 2px 0 6px 0; padding-left: 16px; }
 li { margin-bottom: 2px; }
 .skills { margin: 2px 0; }
 p { margin: 6px 0; }
+
+/* Deterministic page breaking (PRD §21). Without these, Chromium will happily
+   split a job entry so its heading sits alone at the foot of one page and its
+   bullets start the next, or strand a single bullet on page two — both of
+   which read as sloppy on a document whose whole job is to look considered.
+   `break-inside` keeps a unit together; the orphans/widows floor stops a
+   paragraph fragmenting to one line. */
+h2 { break-after: avoid; page-break-after: avoid; }
+.entry { break-inside: avoid; page-break-inside: avoid; }
+.entry-header { break-after: avoid; page-break-after: avoid; }
+li { break-inside: avoid; page-break-inside: avoid; }
+p { orphans: 2; widows: 2; }
 """
 
 
@@ -48,12 +61,16 @@ def render_resume_html(content: dict, contact_email: str, template_id: str = "at
     experience_html = ""
     for entry in content.get("experience", []):
         bullets = "".join(f"<li>{_esc(b)}</li>" for b in entry.get("bullets", []))
+        # Wrapped so the break-inside:avoid rule in _BASE_STYLE can keep a
+        # single role's heading and its bullets on the same page.
         experience_html += f"""
-        <div class="entry-header">
-            <span>{_esc(entry.get('title', ''))} — {_esc(entry.get('employer', ''))}</span>
-            <span class="entry-dates">{_esc(entry.get('start_date', ''))} – {_esc(entry.get('end_date', ''))}</span>
+        <div class="entry">
+            <div class="entry-header">
+                <span>{_esc(entry.get('title', ''))} — {_esc(entry.get('employer', ''))}</span>
+                <span class="entry-dates">{_esc(entry.get('start_date', ''))} – {_esc(entry.get('end_date', ''))}</span>
+            </div>
+            <ul>{bullets}</ul>
         </div>
-        <ul>{bullets}</ul>
         """
 
     return f"""<!DOCTYPE html>

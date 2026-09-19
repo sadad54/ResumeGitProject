@@ -14,6 +14,21 @@ def extract_pdf_text(pdf_bytes: bytes) -> str:
     return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
+def count_pdf_pages(pdf_bytes: bytes) -> int:
+    return len(PdfReader(io.BytesIO(pdf_bytes)).pages)
+
+
+def detect_overflow(pdf_bytes: bytes, max_pages: int) -> tuple[bool, int]:
+    """Returns (overflowed, actual_page_count).
+
+    Overflow is a real export defect rather than a cosmetic one: a resume that
+    spills a single orphaned line onto page two reads as careless, and many ATS
+    parsers weight first-page content differently.
+    """
+    pages = count_pdf_pages(pdf_bytes)
+    return (pages > max_pages, pages)
+
+
 def _normalize(text: str) -> str:
     return " ".join(text.split()).lower()
 
