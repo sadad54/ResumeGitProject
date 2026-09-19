@@ -18,6 +18,7 @@ type ProfileFact = {
  * the user reviews and confirms it — no ProfileFact is trusted sight-unseen.
  */
 export function ResumeUpload() {
+  const [signedIn, setSignedIn] = useState(false);
   const [facts, setFacts] = useState<ProfileFact[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,12 @@ export function ResumeUpload() {
   }
 
   useEffect(() => {
+    // getAccessToken() reads localStorage, which doesn't exist during SSR —
+    // calling it directly in the render body would make the server render
+    // "signed out" while the client immediately re-renders "signed in",
+    // causing a hydration mismatch. Deferring to an effect (client-only,
+    // post-mount) keeps the first client render identical to the SSR output.
+    setSignedIn(!!getAccessToken());
     if (!getAccessToken()) return;
     void loadFacts();
   }, []);
@@ -64,7 +71,7 @@ export function ResumeUpload() {
     setFacts((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
   }
 
-  if (!getAccessToken()) return null;
+  if (!signedIn) return null;
 
   return (
     <div className="space-y-3">

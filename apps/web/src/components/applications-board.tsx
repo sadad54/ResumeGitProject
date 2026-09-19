@@ -23,6 +23,7 @@ const STAGES: Application["stage"][] = [
  * view is a natural later enhancement, not required for the Definition of Done.
  */
 export function ApplicationsBoard() {
+  const [signedIn, setSignedIn] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [jobs, setJobs] = useState<Record<string, Job>>({});
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +42,9 @@ export function ApplicationsBoard() {
   }
 
   useEffect(() => {
+    // See resume-upload.tsx for why this is deferred to an effect rather
+    // than called directly in the render body (SSR/hydration mismatch).
+    setSignedIn(!!getAccessToken());
     if (!getAccessToken()) return;
     void load();
   }, []);
@@ -63,7 +67,7 @@ export function ApplicationsBoard() {
     setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
   }
 
-  if (!getAccessToken()) {
+  if (!signedIn) {
     return <p className="text-sm text-neutral-500">Log in on Home to track applications.</p>;
   }
 

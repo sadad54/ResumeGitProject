@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch, ApiError, setTokens, getAccessToken } from "@/lib/api";
 
 type TokenResponse = { access_token: string; refresh_token: string };
@@ -11,8 +11,19 @@ export function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
 
-  if (typeof window !== "undefined" && getAccessToken()) {
+  useEffect(() => {
+    // getAccessToken() reads localStorage, which doesn't exist during SSR.
+    // Calling it directly in the render body (as `typeof window !== "undefined"
+    // && getAccessToken()` did) makes the server always render the form (window
+    // is never defined server-side) while an already-logged-in client
+    // immediately renders null — a hydration mismatch. Deferring to an effect
+    // keeps the first client render identical to the SSR output.
+    setSignedIn(!!getAccessToken());
+  }, []);
+
+  if (signedIn) {
     return null;
   }
 
