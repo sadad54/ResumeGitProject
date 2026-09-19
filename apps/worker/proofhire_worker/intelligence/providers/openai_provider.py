@@ -8,6 +8,7 @@ import json
 import time
 from typing import TypeVar
 
+import openai
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
@@ -18,10 +19,24 @@ from proofhire_worker.intelligence.llm_provider import (
     StructuredResult,
     UsageMetadata,
 )
+from proofhire_worker.intelligence.retry import with_retries
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
 MAX_SCHEMA_REPAIR_ATTEMPTS = 2
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Transport-level failures worth re-sending the identical request for.
+    Deliberately excludes AuthenticationError/BadRequestError — those are
+    deterministic and retrying only burns quota."""
+    if isinstance(
+        exc,
+        openai.RateLimitError | openai.APITimeoutError | openai.APIConnectionError,
+    ):
+        return True
+    status = getattr(exc, "status_code", None)
+    return isinstance(status, int) and status >= 500
 
 # Rough $/1K-token estimates for cost telemetry (PRD §29). Not billing-accurate —
 # update from real usage once GenerationRun data accumulates (Phase 9 spike).
@@ -62,12 +77,17 @@ class OpenAIProvider:
         total_output_tokens = 0
 
         for attempt in range(MAX_SCHEMA_REPAIR_ATTEMPTS + 1):
-            response = await self._client.chat.completions.create(
-                model=model_config.model,
-                temperature=model_config.temperature,
-                max_tokens=model_config.max_tokens,
-                response_format={"type": "json_object"},
-                messages=chat_messages,
+            response = await with_retries(
+                lambda: self._client.chat.completions.create(
+                    model=model_config.model,
+                    temperature=model_config.temperature,
+                    max_tokens=model_config.max_tokens,
+                    response_format={"type": "json_object"},
+                    messages=chat_messages,
+                ),
+                is_retryable=_is_retryable,
+                provider=self.name,
+                task=task,
             )
             usage = response.usage
             total_input_tokens += usage.prompt_tokens if usage else 0
@@ -111,5 +131,10 @@ class OpenAIProvider:
         )
 
     async def embed(self, texts: list[str], *, model: str = "text-embedding-3-small") -> list[list[float]]:
-        response = await self._client.embeddings.create(model=model, input=texts)
+        response = await with_retries(
+            lambda: self._client.embeddings.create(model=model, input=texts),
+            is_retryable=_is_retryable,
+            provider=self.name,
+            task="embed",
+        )
         return [item.embedding for item in response.data]

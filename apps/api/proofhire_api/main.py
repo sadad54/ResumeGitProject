@@ -2,14 +2,13 @@
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from proofhire_api.config import get_settings
 from proofhire_api.logging import configure_logging
 from proofhire_api.middleware.security_headers import SecurityHeadersMiddleware
 from proofhire_api.middleware.tracing import TraceIdMiddleware
-from proofhire_api.telemetry import configure_tracing
 from proofhire_api.routers import (
     applications,
     auth,
@@ -21,6 +20,7 @@ from proofhire_api.routers import (
     jobs,
     profile,
 )
+from proofhire_api.telemetry import configure_tracing
 
 
 def create_app() -> FastAPI:

@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proofhire_api.db import get_db
 from proofhire_api.models.user import User
-from proofhire_api.security.jwt import InvalidTokenError, TokenType, decode_token
+from proofhire_api.security.jwt import InvalidTokenError, TokenType, decode_token_claims
+from proofhire_api.security.token_revocation import RevocationBackendUnavailable, is_revoked
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -20,11 +21,20 @@ async def _resolve_user(token: str | None, db: AsyncSession) -> User:
     if token is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")
     try:
-        user_id = decode_token(token, TokenType.ACCESS)
+        claims = decode_token_claims(token, TokenType.ACCESS)
     except InvalidTokenError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token") from exc
 
-    user = await db.get(User, user_id)
+    try:
+        if await is_revoked(claims.jti):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has been revoked")
+    except RevocationBackendUnavailable as exc:
+        # Fail closed: we cannot prove this token wasn't logged out.
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Authentication temporarily unavailable"
+        ) from exc
+
+    user = await db.get(User, claims.user_id)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
     return user

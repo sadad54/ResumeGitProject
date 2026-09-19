@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from proofhire_contracts import GenerationRunStatus
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 

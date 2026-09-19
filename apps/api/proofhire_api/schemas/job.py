@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from proofhire_contracts import MatchLabel, RequirementCategory
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, model_validator
 
 
 class JobCreateRequest(BaseModel):

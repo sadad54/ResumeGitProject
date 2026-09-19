@@ -1,7 +1,12 @@
 import uuid
 from datetime import datetime
 
-from proofhire_contracts import ClaimVerificationStatus, DocumentType, GenerationRunStatus, TailoringMode
+from proofhire_contracts import (
+    ClaimVerificationStatus,
+    DocumentType,
+    GenerationRunStatus,
+    TailoringMode,
+)
 from pydantic import BaseModel
 
 

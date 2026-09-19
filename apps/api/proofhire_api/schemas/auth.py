@@ -25,6 +25,12 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class LogoutRequest(BaseModel):
+    # Optional so a client that has already dropped its refresh token can still
+    # revoke the access token it's holding.
+    refresh_token: str | None = None
+
+
 class UserPublic(BaseModel):
     id: uuid.UUID
     email: EmailStr

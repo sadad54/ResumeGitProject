@@ -2,7 +2,8 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from proofhire_contracts import SyncStatus
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proofhire_api.config import get_settings
@@ -20,6 +21,8 @@ from proofhire_api.schemas.github import (
     SyncTriggerRequest,
     SyncTriggerResponse,
 )
+from proofhire_api.security.rate_limit import sync_rate_limit
+from proofhire_api.security.token_crypto import decrypt_token, encrypt_token
 from proofhire_api.services.github_client import GitHubClient
 from proofhire_api.services.github_oauth import (
     GitHubOAuthError,
@@ -28,8 +31,6 @@ from proofhire_api.services.github_oauth import (
     fetch_github_user,
     verify_oauth_state,
 )
-from proofhire_api.security.token_crypto import decrypt_token, encrypt_token
-from proofhire_contracts import SyncStatus
 
 router = APIRouter(prefix="/api/v1/github", tags=["github"])
 
@@ -37,6 +38,30 @@ router = APIRouter(prefix="/api/v1/github", tags=["github"])
 @router.post("/connect", response_model=ConnectResponse)
 async def connect(current_user: User = Depends(get_current_user)) -> ConnectResponse:
     return ConnectResponse(authorize_url=build_authorize_url(current_user.id))
+
+
+@router.delete("/connection", status_code=status.HTTP_204_NO_CONTENT)
+async def disconnect(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Disconnect GitHub: drop the stored OAuth token and the repositories it
+    gave access to.
+
+    Evidence already extracted is deliberately kept — it belongs to the user's
+    profile, not to the connection, and silently destroying a reviewed evidence
+    graph because a token was disconnected would be a nasty surprise. Use
+    account deletion to erase everything.
+    """
+    connection = await db.scalar(
+        select(GitHubConnection).where(GitHubConnection.user_id == current_user.id)
+    )
+    if connection is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No GitHub connection")
+
+    await db.execute(delete(Repository).where(Repository.user_id == current_user.id))
+    await db.delete(connection)
+    await db.commit()
 
 
 @router.get("/callback")
@@ -151,7 +176,12 @@ async def patch_repository(
     return repo
 
 
-@router.post("/sync", response_model=SyncTriggerResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/sync",
+    response_model=SyncTriggerResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(sync_rate_limit)],
+)
 async def trigger_sync(
     body: SyncTriggerRequest,
     current_user: User = Depends(get_current_user),

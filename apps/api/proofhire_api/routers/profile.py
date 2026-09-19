@@ -2,6 +2,10 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from proofhire_contracts import ProfileFactType
+from proofhire_prompts.resume_extract_v1 import SYSTEM_PROMPT, build_user_message
+from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
+from proofhire_worker.intelligence.provider_factory import get_provider
+from proofhire_worker.intelligence.schemas import ResumeExtractionOutput
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,10 +15,6 @@ from proofhire_api.models.profile_fact import ProfileFact
 from proofhire_api.models.user import User
 from proofhire_api.schemas.profile import ProfileFactPatch, ProfileFactPublic
 from proofhire_api.services.resume_parse import ResumeParseError, extract_resume_text
-from proofhire_prompts.resume_extract_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
-from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
-from proofhire_worker.intelligence.provider_factory import get_provider
-from proofhire_worker.intelligence.schemas import ResumeExtractionOutput
 
 router = APIRouter(prefix="/api/v1/profile", tags=["profile"])
 

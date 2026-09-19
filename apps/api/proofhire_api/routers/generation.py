@@ -24,6 +24,7 @@ from proofhire_api.schemas.generation import (
     GenerationRunPublic,
     PositioningResponse,
 )
+from proofhire_api.security.rate_limit import export_rate_limit, generate_rate_limit
 
 router = APIRouter(prefix="/api/v1", tags=["generation"])
 
@@ -49,7 +50,10 @@ async def get_positioning(
 
 
 @router.post(
-    "/jobs/{job_id}/generate", response_model=GenerateResponse, status_code=status.HTTP_202_ACCEPTED
+    "/jobs/{job_id}/generate",
+    response_model=GenerateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(generate_rate_limit)],
 )
 async def trigger_generate(
     job_id: uuid.UUID,
@@ -114,7 +118,11 @@ async def get_document(
     return document
 
 
-@router.post("/documents/{document_id}/export", response_model=ExportResponse)
+@router.post(
+    "/documents/{document_id}/export",
+    response_model=ExportResponse,
+    dependencies=[Depends(export_rate_limit)],
+)
 async def export_document_endpoint(
     document_id: uuid.UUID,
     template: Literal["ats_minimal", "technical_dense", "modern_editorial"] | None = None,

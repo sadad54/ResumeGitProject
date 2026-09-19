@@ -19,11 +19,25 @@ from proofhire_worker.intelligence.llm_provider import (
     StructuredResult,
     UsageMetadata,
 )
+from proofhire_worker.intelligence.retry import with_retries
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
 MAX_SCHEMA_REPAIR_ATTEMPTS = 2
 _TOOL_NAME = "emit_structured_output"
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Transport-level failures worth re-sending the identical request for.
+    Deliberately excludes AuthenticationError/BadRequestError — those are
+    deterministic and retrying only burns quota."""
+    if isinstance(
+        exc,
+        anthropic.RateLimitError | anthropic.APITimeoutError | anthropic.APIConnectionError,
+    ):
+        return True
+    status = getattr(exc, "status_code", None)
+    return isinstance(status, int) and status >= 500
 
 _COST_PER_1K_INPUT = {"claude-sonnet-5": 0.003, "claude-haiku-4-5-20251001": 0.001}
 _COST_PER_1K_OUTPUT = {"claude-sonnet-5": 0.015, "claude-haiku-4-5-20251001": 0.005}
@@ -61,14 +75,19 @@ class AnthropicProvider:
         parsed: BaseModel | None = None
 
         for attempt in range(MAX_SCHEMA_REPAIR_ATTEMPTS + 1):
-            response = await self._client.messages.create(
-                model=model_config.model,
-                max_tokens=model_config.max_tokens,
-                temperature=model_config.temperature,
-                system=system_content,
-                tools=[tool],
-                tool_choice={"type": "tool", "name": _TOOL_NAME},
-                messages=conversation,
+            response = await with_retries(
+                lambda: self._client.messages.create(
+                    model=model_config.model,
+                    max_tokens=model_config.max_tokens,
+                    temperature=model_config.temperature,
+                    system=system_content,
+                    tools=[tool],
+                    tool_choice={"type": "tool", "name": _TOOL_NAME},
+                    messages=conversation,
+                ),
+                is_retryable=_is_retryable,
+                provider=self.name,
+                task=task,
             )
             total_input_tokens += response.usage.input_tokens
             total_output_tokens += response.usage.output_tokens

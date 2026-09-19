@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +9,11 @@ from proofhire_api.dependencies import get_current_user
 from proofhire_api.models.application import Application
 from proofhire_api.models.job import Job
 from proofhire_api.models.user import User
-from proofhire_api.schemas.application import ApplicationCreateRequest, ApplicationPatch, ApplicationPublic
+from proofhire_api.schemas.application import (
+    ApplicationCreateRequest,
+    ApplicationPatch,
+    ApplicationPublic,
+)
 
 router = APIRouter(prefix="/api/v1/applications", tags=["applications"])
 
@@ -37,12 +41,17 @@ async def create_application(
 
 @router.get("", response_model=list[ApplicationPublic])
 async def list_applications(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> list[Application]:
     result = await db.scalars(
         select(Application)
         .where(Application.user_id == current_user.id)
-        .order_by(Application.updated_at.desc())
+        .order_by(Application.updated_at.desc(), Application.id)
+        .limit(limit)
+        .offset(offset)
     )
     return list(result.all())
 

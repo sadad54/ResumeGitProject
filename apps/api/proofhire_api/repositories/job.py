@@ -8,12 +8,12 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from proofhire_contracts import RequirementCategory
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proofhire_api.models.job import Job
 from proofhire_api.models.requirement import Requirement
-from proofhire_contracts import RequirementCategory
 
 
 @dataclass

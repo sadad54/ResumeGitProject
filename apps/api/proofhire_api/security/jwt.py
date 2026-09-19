@@ -7,7 +7,8 @@ auth").
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
@@ -16,6 +17,16 @@ import jwt
 from proofhire_api.config import get_settings
 
 ALGORITHM = "HS256"
+
+
+@dataclass(frozen=True)
+class TokenClaims:
+    user_id: uuid.UUID
+    # Unique per issued token, so a single session can be revoked on logout
+    # without invalidating the user's other sessions (which is what rotating
+    # the signing key or a user-level "revoked after" timestamp would do).
+    jti: str
+    expires_at: datetime
 
 
 class TokenType(StrEnum):
@@ -30,10 +41,11 @@ class InvalidTokenError(Exception):
 
 def _create_token(user_id: uuid.UUID, token_type: TokenType, expires_delta: timedelta) -> str:
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload: dict[str, Any] = {
         "sub": str(user_id),
         "type": token_type.value,
+        "jti": uuid.uuid4().hex,
         "iat": now,
         "exp": now + expires_delta,
     }
@@ -64,7 +76,7 @@ def create_oauth_state_token(user_id: uuid.UUID) -> str:
     return _create_token(user_id, TokenType.OAUTH_STATE, timedelta(minutes=10))
 
 
-def decode_token(token: str, expected_type: TokenType) -> uuid.UUID:
+def decode_token_claims(token: str, expected_type: TokenType) -> TokenClaims:
     settings = get_settings()
     try:
         payload = jwt.decode(token, settings.auth_secret_key, algorithms=[ALGORITHM])
@@ -75,6 +87,22 @@ def decode_token(token: str, expected_type: TokenType) -> uuid.UUID:
         raise InvalidTokenError(f"expected token type {expected_type.value}")
 
     try:
-        return uuid.UUID(payload["sub"])
+        user_id = uuid.UUID(payload["sub"])
     except (KeyError, ValueError) as exc:
         raise InvalidTokenError("malformed subject claim") from exc
+
+    jti = payload.get("jti")
+    if not isinstance(jti, str) or not jti:
+        # Pre-jti tokens can't be revoked, so they're refused rather than
+        # silently trusted — otherwise an old token would bypass logout.
+        raise InvalidTokenError("missing jti claim")
+
+    return TokenClaims(
+        user_id=user_id,
+        jti=jti,
+        expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+    )
+
+
+def decode_token(token: str, expected_type: TokenType) -> uuid.UUID:
+    return decode_token_claims(token, expected_type).user_id

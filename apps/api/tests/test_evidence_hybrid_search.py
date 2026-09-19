@@ -179,3 +179,91 @@ async def test_hybrid_search_scopes_by_user(db_session, fixture_env):
 
     await db_session.delete(other_user)
     await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_evidence_type_metadata_filter_narrows_candidates(db_session, fixture_env):
+    """Metadata filtering (PRD §17) must exclude non-matching types entirely,
+    not merely rank them lower — a filtered-out type should not appear at all
+    even when it is the strongest lexical match."""
+    user, repo, artifact = fixture_env
+    repo_layer = SQLAlchemyEvidenceRepository(db_session)
+
+    await repo_layer.save_candidates(
+        [
+            EvidenceCandidate(
+                user_id=user.id, repository_id=repo.id, evidence_type=EvidenceType.SKILL_USAGE,
+                title="Terraform modules", normalized_claim="Authors Terraform modules for infrastructure.",
+                description="", confidence=0.8, extraction_method="test", sources=[_source(artifact)],
+            ),
+            EvidenceCandidate(
+                user_id=user.id, repository_id=repo.id, evidence_type=EvidenceType.ARCHITECTURE,
+                title="Terraform state backend", normalized_claim="Chose a remote Terraform state backend.",
+                description="", confidence=0.8, extraction_method="test", sources=[_source(artifact)],
+            ),
+        ]
+    )
+
+    unfiltered = await repo_layer.hybrid_search(
+        EvidenceQuery(user_id=user.id, text="Terraform", limit=10)
+    )
+    assert {h.title for h in unfiltered} >= {"Terraform modules", "Terraform state backend"}
+
+    filtered = await repo_layer.hybrid_search(
+        EvidenceQuery(
+            user_id=user.id,
+            text="Terraform",
+            limit=10,
+            evidence_types=[EvidenceType.ARCHITECTURE.value],
+        )
+    )
+    assert [h.title for h in filtered] == ["Terraform state backend"]
+
+
+@pytest.mark.asyncio
+async def test_repository_metadata_filter_excludes_other_repositories(db_session, fixture_env):
+    user, repo, artifact = fixture_env
+    other_repo = Repository(
+        user_id=user.id,
+        provider_repo_id=int.from_bytes(uuid.uuid4().bytes[:4], "big") % 2_000_000_000,
+        owner="testowner",
+        name="otherrepo",
+        url="https://github.com/testowner/otherrepo",
+    )
+    db_session.add(other_repo)
+    await db_session.flush()
+
+    other_artifact = SourceArtifact(
+        repository_id=other_repo.id, type="source_file", path="svc/api.py",
+        commit_sha="d" * 40, content_hash="e" * 64, priority="p1",
+    )
+    db_session.add(other_artifact)
+    await db_session.flush()
+    await db_session.commit()
+
+    repo_layer = SQLAlchemyEvidenceRepository(db_session)
+    await repo_layer.save_candidates(
+        [
+            EvidenceCandidate(
+                user_id=user.id, repository_id=repo.id, evidence_type=EvidenceType.SKILL_USAGE,
+                title="gRPC service in repo A", normalized_claim="Implements a gRPC service.",
+                description="", confidence=0.8, extraction_method="test", sources=[_source(artifact)],
+            ),
+            EvidenceCandidate(
+                user_id=user.id, repository_id=other_repo.id, evidence_type=EvidenceType.SKILL_USAGE,
+                title="gRPC service in repo B", normalized_claim="Implements a gRPC service.",
+                description="", confidence=0.8, extraction_method="test",
+                sources=[
+                    EvidenceSourceCandidate(
+                        source_artifact_id=other_artifact.id, locator="svc/api.py",
+                        snippet_hash="f" * 64, commit_sha="d" * 40,
+                    )
+                ],
+            ),
+        ]
+    )
+
+    filtered = await repo_layer.hybrid_search(
+        EvidenceQuery(user_id=user.id, text="gRPC service", limit=10, repository_ids=[other_repo.id])
+    )
+    assert [h.title for h in filtered] == ["gRPC service in repo B"]

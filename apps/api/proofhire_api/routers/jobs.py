@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from proofhire_contracts import MatchLabel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +22,7 @@ from proofhire_api.schemas.job import (
     JobPublic,
     RequirementPublic,
 )
+from proofhire_api.security.rate_limit import analyze_rate_limit
 from proofhire_api.services.jd_fetch import JDFetchError, fetch_and_extract_text
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
@@ -88,10 +89,17 @@ async def create_job(
 
 @router.get("", response_model=list[JobPublic])
 async def list_jobs(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> list[Job]:
     result = await db.scalars(
-        select(Job).where(Job.user_id == current_user.id).order_by(Job.captured_at.desc())
+        select(Job)
+        .where(Job.user_id == current_user.id)
+        .order_by(Job.captured_at.desc(), Job.id)
+        .limit(limit)
+        .offset(offset)
     )
     return list(result.all())
 
@@ -109,7 +117,10 @@ async def get_job(
 
 
 @router.post(
-    "/{job_id}/analyze", response_model=AnalyzeResponse, status_code=status.HTTP_202_ACCEPTED
+    "/{job_id}/analyze",
+    response_model=AnalyzeResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(analyze_rate_limit)],
 )
 async def analyze_job_endpoint(
     job_id: uuid.UUID,

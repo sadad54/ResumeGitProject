@@ -10,12 +10,12 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from proofhire_contracts import EvidenceStatus, EvidenceType
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proofhire_api.models.evidence import Evidence, EvidenceSkill, EvidenceSource
 from proofhire_api.models.skill import Skill
-from proofhire_contracts import EvidenceStatus, EvidenceType
 
 # ADR-0006: weighted-sum fusion weights. Revisit once Phase 9's eval harness has
 # real labeled data to tune against.
@@ -70,6 +70,11 @@ class EvidenceQuery:
     embedding: list[float] | None = None
     skill_keywords: list[str] = field(default_factory=list)
     limit: int = 10
+    # Metadata filters (PRD §17): narrow the candidate set *before* fusion
+    # scoring, so a requirement that can only be satisfied by, say, repository
+    # evidence isn't scored against unrelated types. Empty means no filter.
+    evidence_types: list[str] = field(default_factory=list)
+    repository_ids: list[uuid.UUID] = field(default_factory=list)
 
 
 class EvidenceRepository(Protocol):
@@ -183,6 +188,12 @@ class SQLAlchemyEvidenceRepository:
             else "0"
         )
 
+        metadata_filters = ""
+        if query.evidence_types:
+            metadata_filters += " AND e.evidence_type = ANY(:evidence_types)"
+        if query.repository_ids:
+            metadata_filters += " AND e.repository_id = ANY(CAST(:repository_ids AS uuid[]))"
+
         sql = f"""
             SELECT
                 e.id, e.title, e.normalized_claim, e.evidence_type, e.confidence,
@@ -191,7 +202,7 @@ class SQLAlchemyEvidenceRepository:
                 {skill_term} AS skill_score
             FROM evidence e
             {skill_join}
-            WHERE e.user_id = :user_id AND e.status != 'rejected'
+            WHERE e.user_id = :user_id AND e.status != 'rejected'{metadata_filters}
             ORDER BY (
                 :lexical_weight * LEAST(1.0, ts_rank_cd(e.search_vector, plainto_tsquery('english', :text)))
                 + :vector_weight * {vector_term}
@@ -215,6 +226,10 @@ class SQLAlchemyEvidenceRepository:
         if has_keywords:
             params["keywords"] = [k.strip().lower() for k in query.skill_keywords]
             params["keyword_count"] = float(len(query.skill_keywords))
+        if query.evidence_types:
+            params["evidence_types"] = list(query.evidence_types)
+        if query.repository_ids:
+            params["repository_ids"] = [str(r) for r in query.repository_ids]
 
         rows = (await self._session.execute(text(sql), params)).mappings().all()
 

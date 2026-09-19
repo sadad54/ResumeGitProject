@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from proofhire_contracts import EvidenceStatus, EvidenceType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,13 +39,23 @@ async def get_evidence_graph(
 @router.get("", response_model=list[EvidencePublic])
 async def list_evidence(
     repository_id: uuid.UUID | None = None,
+    evidence_type: EvidenceType | None = None,
+    # Aliased so the HTTP surface stays `?status=`, while the local name avoids
+    # shadowing fastapi's `status` module used for HTTPException codes.
+    status_filter: EvidenceStatus | None = Query(default=None, alias="status"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[Evidence]:
     stmt = select(Evidence).where(Evidence.user_id == current_user.id)
     if repository_id is not None:
         stmt = stmt.where(Evidence.repository_id == repository_id)
-    stmt = stmt.order_by(Evidence.created_at.desc())
+    if evidence_type is not None:
+        stmt = stmt.where(Evidence.type == evidence_type)
+    if status_filter is not None:
+        stmt = stmt.where(Evidence.status == status_filter)
+    stmt = stmt.order_by(Evidence.created_at.desc(), Evidence.id).limit(limit).offset(offset)
     result = await db.scalars(stmt)
     return list(result.all())
 
