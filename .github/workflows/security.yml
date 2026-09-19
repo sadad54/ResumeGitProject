@@ -49,7 +49,7 @@ jobs:
       - name: Build ${{ matrix.name }} image
         run: docker build -f ${{ matrix.dockerfile }} -t proofhire-${{ matrix.name }}:scan .
       - name: Scan ${{ matrix.name }} image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: proofhire-${{ matrix.name }}:scan
           format: table
