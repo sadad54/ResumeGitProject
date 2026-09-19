@@ -36,15 +36,3 @@ async def get_current_user(
 ) -> User:
     token = credentials.credentials if credentials is not None else None
     return await _resolve_user(token, db)
-
-
-async def get_current_user_sse(
-    access_token: str | None = None,
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    """Same as get_current_user, but also accepts the token as an `access_token`
-    query param — the browser's native EventSource API cannot set custom headers,
-    so SSE routes need this fallback (PRD §23 SSE streaming)."""
-    token = credentials.credentials if credentials is not None else access_token
-    return await _resolve_user(token, db)
