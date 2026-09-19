@@ -23,6 +23,11 @@ LEXICAL_WEIGHT = 0.35
 VECTOR_WEIGHT = 0.45
 SKILL_WEIGHT = 0.20
 
+# Top-K pulled per signal before fusion. Large enough that a row strong on one
+# signal and moderate on another isn't cut before it can be scored; small
+# enough that fusion touches tens of rows, not the table.
+CANDIDATES_PER_SIGNAL = 50
+
 
 @dataclass
 class EvidenceSourceCandidate:
@@ -159,11 +164,64 @@ class SQLAlchemyEvidenceRepository:
         return saved
 
     async def hybrid_search(self, query: EvidenceQuery) -> list[EvidenceHit]:
-        """Weighted-sum fusion of lexical + vector + skill-overlap signals
-        (ADR-0006). All three run in one SQL query against the GIN/IVFFlat
-        indexes added in migration 0004."""
+        """Two-stage retrieval (ADR-0006): per-signal candidate generation, then
+        weighted-sum fusion over the candidate union.
+
+        Each candidate branch is shaped so its index can serve it — the GIN index
+        via `search_vector @@ tsquery`, the IVFFlat index via a bare
+        `ORDER BY embedding <=> :v LIMIT k`, the skill branch via the
+        evidence_skills join. Fusion then scores only the union, not the table.
+
+        The previous single-query form ordered the whole table by the fused
+        expression; Postgres cannot push an arithmetic expression into either
+        index, so it sequentially scored every row for the user and the
+        indexes were never used. Found by apps/api/scripts/benchmark_queries.py
+        (1.0x speedup with vs without indexes at 20k rows), root-caused from
+        the EXPLAIN plan, and documented in docs/product/metrics.
+
+        A row only reaches fusion if it is top-K on at least one signal. Rows
+        that were weak on every signal could previously fill the tail of a
+        result; they scored ~0 and were cut by the `score <= 0` guard anyway.
+        """
         has_embedding = query.embedding is not None
         has_keywords = bool(query.skill_keywords)
+
+        metadata_filters = ""
+        if query.evidence_types:
+            metadata_filters += " AND e.evidence_type = ANY(:evidence_types)"
+        if query.repository_ids:
+            metadata_filters += " AND e.repository_id = ANY(CAST(:repository_ids AS uuid[]))"
+        base_where = f"e.user_id = :user_id AND e.status != 'rejected'{metadata_filters}"
+
+        branches = [
+            f"""
+            SELECT e.id FROM evidence e
+            WHERE {base_where}
+              AND e.search_vector @@ plainto_tsquery('english', :text)
+            ORDER BY ts_rank_cd(e.search_vector, plainto_tsquery('english', :text)) DESC
+            LIMIT :candidates
+            """
+        ]
+        if has_embedding:
+            branches.append(
+                f"""
+            SELECT e.id FROM evidence e
+            WHERE {base_where} AND e.embedding IS NOT NULL
+            ORDER BY e.embedding <=> CAST(:embedding AS vector)
+            LIMIT :candidates
+            """
+            )
+        if has_keywords:
+            branches.append(
+                f"""
+            SELECT DISTINCT e.id FROM evidence e
+            JOIN evidence_skills es ON es.evidence_id = e.id
+            JOIN skills s ON s.id = es.skill_id
+            WHERE {base_where} AND s.canonical_name = ANY(:keywords)
+            LIMIT :candidates
+            """
+            )
+        candidate_sql = " UNION ".join(f"({b})" for b in branches)
 
         vector_term = (
             "GREATEST(0, 1 - (e.embedding <=> CAST(:embedding AS vector)))"
@@ -188,21 +246,16 @@ class SQLAlchemyEvidenceRepository:
             else "0"
         )
 
-        metadata_filters = ""
-        if query.evidence_types:
-            metadata_filters += " AND e.evidence_type = ANY(:evidence_types)"
-        if query.repository_ids:
-            metadata_filters += " AND e.repository_id = ANY(CAST(:repository_ids AS uuid[]))"
-
         sql = f"""
+            WITH candidates AS ({candidate_sql})
             SELECT
                 e.id, e.title, e.normalized_claim, e.evidence_type, e.confidence,
                 LEAST(1.0, ts_rank_cd(e.search_vector, plainto_tsquery('english', :text))) AS lexical_score,
                 {vector_term} AS vector_score,
                 {skill_term} AS skill_score
-            FROM evidence e
+            FROM candidates c
+            JOIN evidence e ON e.id = c.id
             {skill_join}
-            WHERE e.user_id = :user_id AND e.status != 'rejected'{metadata_filters}
             ORDER BY (
                 :lexical_weight * LEAST(1.0, ts_rank_cd(e.search_vector, plainto_tsquery('english', :text)))
                 + :vector_weight * {vector_term}
@@ -218,6 +271,7 @@ class SQLAlchemyEvidenceRepository:
             "vector_weight": VECTOR_WEIGHT,
             "skill_weight": SKILL_WEIGHT,
             "limit": query.limit,
+            "candidates": max(CANDIDATES_PER_SIGNAL, query.limit),
         }
         if has_embedding:
             # pgvector's text input format is "[v1,v2,...]" with no spaces —

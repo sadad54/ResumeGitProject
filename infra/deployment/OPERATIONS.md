@@ -122,6 +122,16 @@ Release procedure:
    new schema during the switch.
 3. Deploy the application.
 
+**IVFFlat rebuilds need more than the default `maintenance_work_mem`.** The
+`ix_evidence_embedding_ivfflat` index over 1536-dim vectors fails to build
+with Postgres's 64 MB default once the table has even ~2,000 rows
+(`memory required is 65 MB`), found by `apps/api/scripts/benchmark_queries.py`.
+Migration 0004 never hit it because it indexed an empty table. Before any
+`REINDEX` or a migration that recreates that index on a populated database:
+`SET maintenance_work_mem = '512MB';` for the session (or set it in the
+migration itself). pgvector's guidance for `lists` is `rows / 1000`; the
+current `lists = 100` should be retuned once real row counts are known.
+
 Migrations must stay additive-first. A column rename or drop is done as two
 releases: add-and-dual-write, then remove once nothing reads the old column.
 This is what makes rollback (§4) a redeploy rather than a restore.
