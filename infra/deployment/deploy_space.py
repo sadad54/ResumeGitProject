@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SECRETS = [
     "DATABASE_URL", "AUTH_SECRET_KEY", "TOKEN_ENCRYPTION_KEY",
     "GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET",
-    "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "SENTRY_DSN",
+    "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GROQ_API_KEY", "SENTRY_DSN",
 ]
 VARIABLES = ["ENVIRONMENT", "LLM_DEFAULT_PROVIDER", "WEB_BASE_URL", "API_BASE_URL",
              "GITHUB_OAUTH_REDIRECT_URI", "LLM_MODEL_DEFAULT"]
@@ -83,7 +83,11 @@ def main() -> None:
     env["API_BASE_URL"] = space_url
     env["GITHUB_OAUTH_REDIRECT_URI"] = f"{space_url}/api/v1/github/callback"
     env.setdefault("ENVIRONMENT", "production")
-    env.setdefault("LLM_DEFAULT_PROVIDER", "anthropic")
+    # Groq by default: free tier, no card, and fast enough for a live demo.
+    # Anthropic/OpenAI adapters stay in the codebase for later per-user BYOK;
+    # override LLM_DEFAULT_PROVIDER in .env.production to use one of them here.
+    env.setdefault("LLM_DEFAULT_PROVIDER", "groq")
+    env.setdefault("LLM_MODEL_DEFAULT", "llama-3.3-70b-versatile")
 
     api.create_repo(args.space, repo_type="space", space_sdk="docker", exist_ok=True)
     print(f"space: https://huggingface.co/spaces/{args.space}")

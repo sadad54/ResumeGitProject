@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     anthropic_api_key: str = ""
+    groq_api_key: str = ""
     llm_default_provider: str = "anthropic"
 
     s3_endpoint_url: str = ""

@@ -13,6 +13,7 @@ from proofhire_api.middleware.tracing import TraceIdMiddleware
 from proofhire_api.routers import (
     applications,
     auth,
+    demo,
     events,
     evidence,
     generation,
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(demo.router)
     app.include_router(github.router)
     app.include_router(events.router)
     app.include_router(evidence.router)

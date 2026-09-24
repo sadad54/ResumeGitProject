@@ -5,8 +5,8 @@ Item-by-item against `ProofHire_Flagship_AI_FullStack_Checklist.md`, as of
 code exists. **Partial** says what's missing. **Open** says why.
 
 Excluded by decision (need hosting, spend, or human labelling the builder can't
-supply): production deployment, the 100+ labelled JD benchmark, object
-storage, load testing.
+supply): backend (API/worker) hosting — frontend and database are live, see
+below — the 100+ labelled JD benchmark, object storage, load testing.
 
 ## Track A — AI Engineering
 
@@ -152,22 +152,25 @@ input validation + **rate limiting**, secure extension messaging,
 **dependency + container scanning** (0 findings), **prompt-injection tests**
 (13). Open: signed object-storage URLs (excluded).
 
-### 18. Testing — 12/14
+### 18. Testing — 13/14
 
 Backend unit, DB integration, API contract (via generated OpenAPI + real
 routes), worker, retrieval/eval, extension, accessibility (axe), **visual
-regression** (Windows baselines committed; Linux via CI artifact), Playwright
-E2E, **PDF regression**, mocked-LLM, adversarial, CI reports. Open:
-**frontend component tests** (dropped by decision).
+regression** (Windows and Linux baselines both committed; CI compares on
+both), Playwright E2E, **PDF regression**, mocked-LLM, adversarial, CI
+reports. Open: **frontend component tests** (dropped by decision).
 
-## Track C — Production / Systems — 8/12 + load 0/8
+## Track C — Production / Systems — 9/12 + load 0/8
 
 Done: Dockerized (multi-stage, scanned), GitHub Actions, automated migrations
 in CI, health/readiness, OpenTelemetry (opt-in, every stage), structured logs,
 error monitoring (opt-in), API → worker → LLM tracing (span per stage + shared
 trace id), dashboards as code, rollback/backup strategy, environment
-separation. Open: **preview/staging/production deployment** (excluded).
-Load testing: all eight items open (excluded).
+separation, **frontend + database deployed live on free tiers** (Vercel,
+Supabase). Open: **backend hosting** — the Hugging Face Space image and
+deploy script are ready and CI-scanned, but the one step they can't perform,
+a human's `hf auth login`, hasn't happened in this environment, so nothing
+serves the API yet. Load testing: all eight items open (excluded).
 
 ## Track D — Metrics
 
@@ -190,9 +193,11 @@ retrieval + reranking, claim-level provenance, independent verification,
 hallucination guard — all done and tested. Quantitative dataset, measured
 retrieval, measured grounding, production deployment — **open**.
 
-**Full-Stack flagship:** every item done except production deployment, object
-storage, and measured load. Observability, security controls, CI/CD,
-substantial automated tests, generated client, extension, SSE — done.
+**Full-Stack flagship:** every item done except full production deployment
+(frontend and database are live; backend hosting needs a human's Hugging
+Face login), object storage, and measured load. Observability, security
+controls, CI/CD, substantial automated tests, generated client, extension,
+SSE — done.
 
 **End-to-end flow:** every stage exists and is tested in isolation and in
 integration against real Postgres/Redis/Chromium. The single continuous run
