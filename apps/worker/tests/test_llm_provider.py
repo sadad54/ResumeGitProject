@@ -51,3 +51,24 @@ def test_provider_factory_returns_mock():
 def test_provider_factory_rejects_unknown_provider():
     with pytest.raises(ValueError):
         get_provider("not-a-real-provider")
+
+
+def test_provider_factory_requires_groq_api_key(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    with pytest.raises(RuntimeError):
+        get_provider("groq")
+
+
+def test_provider_factory_returns_groq_when_key_present(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    provider = get_provider("groq")
+    assert provider.name == "groq"
+
+
+@pytest.mark.asyncio
+async def test_groq_embed_is_not_implemented():
+    from proofhire_worker.intelligence.providers.groq_provider import GroqProvider
+
+    provider = GroqProvider(api_key="test-key")
+    with pytest.raises(NotImplementedError):
+        await provider.embed(["text"], model="mock")

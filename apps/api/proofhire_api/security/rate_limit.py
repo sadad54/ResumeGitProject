@@ -79,3 +79,41 @@ analyze_rate_limit = RateLimit(name="job_analyze", limit=10, window_seconds=60)
 generate_rate_limit = RateLimit(name="generate", limit=10, window_seconds=60)
 sync_rate_limit = RateLimit(name="github_sync", limit=5, window_seconds=300)
 export_rate_limit = RateLimit(name="export", limit=20, window_seconds=60)
+
+
+class GlobalRateLimit:
+    """Same fixed-window counter as RateLimit, keyed by a fixed bucket name
+    instead of the authenticated user — for endpoints that run before there is
+    a user to key by, such as minting a demo session. One shared budget across
+    every visitor is intentional here: this guards a specific free-tier public
+    endpoint from being hammered into an unbounded number of DB rows, not
+    individual accountability."""
+
+    def __init__(self, *, name: str, limit: int, window_seconds: int) -> None:
+        self.name = name
+        self.limit = limit
+        self.window_seconds = window_seconds
+
+    async def __call__(self) -> None:
+        bucket = f"ratelimit:{self.name}"
+        retry_after = await _consume(bucket, self.limit, self.window_seconds)
+        if retry_after is not None:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "Rate limit exceeded. Try again shortly.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+
+# The demo account is shared by every visitor, so its session-minting endpoint
+# (routers/demo.py) can't be keyed per-user like the limits above — one global
+# budget instead, tight enough that it can't be used to spray the DB with rows
+# but loose enough that a burst of real portfolio traffic doesn't 429 people.
+demo_session_rate_limit = GlobalRateLimit(name="demo_session", limit=30, window_seconds=60)
+
+# Every GET the demo account makes (dependencies.get_current_user), on top of
+# the endpoint-specific limits above that already apply to it like any other
+# user. Generous enough for normal browsing by several concurrent visitors,
+# tight enough to bound cost on routes that do real per-request work (live
+# export preview) against a free-tier deployment.
+demo_read_rate_limit = GlobalRateLimit(name="demo_read", limit=120, window_seconds=60)

@@ -41,3 +41,18 @@ async def test_fails_open_when_redis_is_unavailable(monkeypatch, bucket):
     monkeypatch.setattr(rl, "get_redis", lambda: _Broken())
 
     assert await rl._consume(bucket, limit=1, window_seconds=60) is None
+
+
+async def test_global_rate_limit_shares_one_budget_across_callers(monkeypatch, bucket):
+    """Unlike RateLimit, GlobalRateLimit has no user to key by (it guards the
+    unauthenticated demo/session endpoint) — every caller draws from the same
+    bucket by name."""
+    import fastapi
+
+    limiter = rl.GlobalRateLimit(name=bucket.removeprefix("ratelimit:"), limit=2, window_seconds=60)
+
+    await limiter()
+    await limiter()
+    with pytest.raises(fastapi.HTTPException) as exc_info:
+        await limiter()
+    assert exc_info.value.status_code == 429

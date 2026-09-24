@@ -49,7 +49,31 @@ Then:
    `externally_connectable` match in `manifest.json` to the Vercel origin,
    then reload the unpacked extension.
 
+## Seeding the live demo (recruiter-facing, no GitHub OAuth required)
+
+A visitor can open a real, working account — real synced repo, real evidence
+graph, real generated resume — without connecting their own GitHub, via a
+seeded read-only guest account. `POST /api/v1/demo/session` mints a token for
+it; `dependencies.get_current_user` blocks every mutating request from that
+account regardless of route, so it's safe to expose publicly.
+
+Populate it once (idempotent — re-run any time, e.g. after a schema change):
+
+```bash
+python apps/api/scripts/seed_demo.py --github-token <PAT with public_repo read> \
+    --repo-owner sadad54 --repo-name ResumeGitProject
+```
+
+Needs the same `DATABASE_URL`/`GROQ_API_KEY` (or whichever provider
+`LLM_DEFAULT_PROVIDER` selects) as the Space itself, so run it against the
+Space's own environment (or export the same values locally) — it calls the
+real pipeline (sync → evidence extraction → JD analysis → coverage →
+generation) directly, not through Dramatiq, so it completes synchronously
+with real errors instead of depending on a queue consumer.
+
 ## Verify
 
 - `GET <space-url>/ready` → `{"status":"ready","postgres":"ok","redis":"ok"}`
 - Sign up on the Vercel site, connect GitHub, sync a repository.
+- `POST <space-url>/api/v1/demo/session` → 200 with a token; `GET /api/v1/auth/me`
+  with it returns the seeded demo account.

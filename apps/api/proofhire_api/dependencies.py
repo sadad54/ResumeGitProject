@@ -5,7 +5,7 @@ scope queries by `user_id` (PRD §27 "row-level ownership checks"). No router sh
 query a user-owned table without going through this.
 """
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,8 @@ from proofhire_api.security.jwt import InvalidTokenError, TokenType, decode_toke
 from proofhire_api.security.token_revocation import RevocationBackendUnavailable, is_revoked
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 async def _resolve_user(token: str | None, db: AsyncSession) -> User:
@@ -41,8 +43,31 @@ async def _resolve_user(token: str | None, db: AsyncSession) -> User:
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     token = credentials.credentials if credentials is not None else None
-    return await _resolve_user(token, db)
+    user = await _resolve_user(token, db)
+    # The seeded guest/demo account (routers/demo.py) is read-only everywhere,
+    # enforced here rather than per-router since every feature router already
+    # depends on get_current_user for ownership scoping (see module docstring)
+    # — one choke point instead of a mutating-endpoint allowlist that a new
+    # router could forget to apply.
+    if user.is_demo:
+        if request.method not in _SAFE_METHODS:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "The demo account is read-only. Sign up to make changes.",
+            )
+        # Reads are normally unlimited (cheap, ownership-scoped — see
+        # security/rate_limit.py), but the demo account is shared by every
+        # visitor and some of its GET routes do real work per request (e.g.
+        # live export preview re-renders through the real renderer), so it
+        # gets its own shared budget the way sync/generate/export do for
+        # real accounts. Imported here, not at module level: rate_limit.py
+        # itself depends on get_current_user for the per-user limiters above.
+        from proofhire_api.security.rate_limit import demo_read_rate_limit
+
+        await demo_read_rate_limit()
+    return user
