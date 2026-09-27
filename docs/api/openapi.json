@@ -2227,6 +2227,27 @@
         ]
       }
     },
+    "/api/v1/demo/session": {
+      "post": {
+        "operationId": "start_demo_session_api_v1_demo_session_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Start Demo Session",
+        "tags": [
+          "demo"
+        ]
+      }
+    },
     "/api/v1/documents": {
       "get": {
         "operationId": "list_documents_api_v1_documents_get",
