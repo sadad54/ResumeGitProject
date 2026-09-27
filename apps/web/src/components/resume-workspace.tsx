@@ -1,14 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { openRunEvents } from "@/lib/events";
-import { apiFetch, ApiError, getAccessToken } from "@/lib/api";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@proofhire/design-system/ui";
+import { ApiError } from "@/lib/api";
+import { api, unwrap } from "@/lib/api-client";
+import { openRunEvents } from "@/lib/events";
+import {
+  qk,
+  useClaims,
+  useDocument,
+  useDocuments,
+  useJobs,
+  type GeneratedDocument,
+} from "@/lib/queries";
+import { useSession } from "@/lib/session";
 import { DocumentDiff } from "./document-diff";
 import { DocumentPreview } from "./document-preview";
+import { DEMO_READ_ONLY, RequireSession } from "./session-ui";
 
-type Job = { id: string; role: string | null; company: string | null };
-
+// `content_json` is free-form in the API schema; its shape is defined by the
+// worker's writer output schemas (intelligence/schemas.py).
 type ResumeContent = {
   summary: string;
   skills: string[];
@@ -20,32 +32,8 @@ type ResumeContent = {
     bullets: string[];
   }[];
 };
-
 type CoverLetterContent = { body_paragraphs: string[] };
-
-type GeneratedDocument = {
-  id: string;
-  job_id: string;
-  version: number;
-  type: "resume" | "cover_letter";
-  content_json: ResumeContent | CoverLetterContent;
-  pdf_available: boolean;
-  template_id: string;
-  page_count: number | null;
-};
-
-type GeneratedClaim = {
-  id: string;
-  claim_text: string;
-  claim_type: string;
-  verification_status:
-    "supported" | "partially_supported" | "unsupported" | "contradictory";
-  confidence: number;
-  evidence_id: string | null;
-  evidence_title: string | null;
-  evidence_repository: string | null;
-  source_locator: string | null;
-};
+type DocumentType = "resume" | "cover_letter";
 
 const STATUS_COLOR: Record<string, string> = {
   supported: "border-green-400",
@@ -53,216 +41,179 @@ const STATUS_COLOR: Record<string, string> = {
   unsupported: "border-red-400",
   contradictory: "border-red-600",
 };
+const GENERATION_TIMEOUT_MS = 180_000;
 
 /**
  * Resume workspace (PRD §11.4 signature interaction): click a bullet, see the
  * exact evidence/repository it traces back to, or why it was stripped.
  */
 export function ResumeWorkspace() {
-  const streamCleanup = useRef<(() => void) | null>(null);
-  useEffect(() => () => streamCleanup.current?.(), []);
-  const [savedDocuments, setSavedDocuments] = useState<GeneratedDocument[]>([]);
-  const [template, setTemplate] = useState("ats_minimal");
-  const [signedIn, setSignedIn] = useState(false);
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [selectedJobId, setSelectedJobId] = useState<string>("");
-  const [documentType, setDocumentType] = useState<"resume" | "cover_letter">(
-    "resume",
+  return (
+    <RequireSession what="generate verified documents">
+      <Workspace />
+    </RequireSession>
   );
-  const [document, setDocument] = useState<GeneratedDocument | null>(null);
-  const [claims, setClaims] = useState<GeneratedClaim[]>([]);
-  const [selectedBullet, setSelectedBullet] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "generating" | "done">("idle");
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loadingDocuments, setLoadingDocuments] = useState(true);
-  const [compareId, setCompareId] = useState<string>("");
+}
+
+function Workspace() {
+  const { canWrite } = useSession();
+  const queryClient = useQueryClient();
+  const documents = useDocuments();
+  const jobs = useJobs();
+  const [documentId, setDocumentId] = useState<string | null>(null);
+  const document = useDocument(documentId);
+  const claims = useClaims(documentId);
+
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const [documentType, setDocumentType] = useState<DocumentType>("resume");
+  const [template, setTemplate] = useState("ats_minimal");
+  const [compareId, setCompareId] = useState("");
   const [showPreview, setShowPreview] = useState(true);
-  const [lastExport, setLastExport] = useState<{
-    page_count: number | null;
-    overflowed: boolean;
-  } | null>(null);
+  const [selectedBullet, setSelectedBullet] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [lastExport, setLastExport] = useState<{ page_count?: number | null; overflowed?: boolean } | null>(null);
+  const stopWaiting = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopWaiting.current?.(), []);
 
   useEffect(() => {
-    setSignedIn(!!getAccessToken());
-    if (!getAccessToken()) return;
-    setSelectedJobId(
-      new URLSearchParams(window.location.search).get("job") || "",
-    );
-    apiFetch<GeneratedDocument[]>("/api/v1/documents")
-      .then(setSavedDocuments)
-      .catch(() => setError("Could not load saved documents."))
-      .finally(() => setLoadingDocuments(false));
-    apiFetch<Job[]>("/api/v1/jobs")
-      .then(setJobs)
-      .catch(() => {});
+    setSelectedJobId(new URLSearchParams(window.location.search).get("job") || "");
   }, []);
+  // Opening a document adopts its template, and clears per-document state.
+  const doc = document.data;
+  useEffect(() => {
+    if (!doc) return;
+    setTemplate(doc.type === "resume" ? doc.template_id : "ats_minimal");
+    setSelectedBullet(null);
+    setLastExport(null);
+  }, [doc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!signedIn) {
-    return (
-      <p className="text-sm text-neutral-500">
-        Log in on Home to generate a resume.
-      </p>
-    );
-  }
+  const open = (id: string) => {
+    setNotice(null);
+    setDocumentId(id);
+  };
 
-  async function generate() {
-    if (!selectedJobId) return;
-    setError(null);
-    setStatus("generating");
-    setDocument(null);
-    setClaims([]);
-    try {
-      await apiFetch(`/api/v1/jobs/${selectedJobId}/generate`, {
-        method: "POST",
-        body: JSON.stringify({
-          mode: "conservative",
-          document_type: documentType,
-        }),
-      });
-      await waitForCompletion(selectedJobId);
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Failed to generate resume",
-      );
-      setStatus("idle");
-    }
-  }
-
-  async function waitForCompletion(jobId: string) {
-    streamCleanup.current?.();
-    await new Promise<void>((resolve) => {
+  /** Resolves with the new document's id, or rejects with a user-facing message. */
+  function waitForGeneration(jobId: string): Promise<string> {
+    stopWaiting.current?.();
+    return new Promise((resolve, reject) => {
       const source = openRunEvents(jobId);
-      const finish = () => {
+      const done = () => {
         clearTimeout(timer);
         source.close();
-        resolve();
+        stopWaiting.current = null;
       };
       const timer = setTimeout(() => {
-        setError(
-          "Generation is taking longer than expected. Reopen Documents to check saved results.",
-        );
-        setStatus("idle");
-        finish();
-      }, 120000);
-      streamCleanup.current = finish;
-      source.addEventListener("generation.completed", async (e) => {
+        done();
+        reject(new Error("Generation is taking longer than expected. It will appear in Saved documents when it finishes."));
+      }, GENERATION_TIMEOUT_MS);
+      stopWaiting.current = done;
+      source.addEventListener("generation.completed", (e) => {
+        done();
         try {
-          const data = JSON.parse((e as MessageEvent).data);
-          await loadDocument(data.document_id);
+          resolve(JSON.parse((e as MessageEvent).data).document_id);
         } catch {
-          setError(
-            "Could not open the generated document. Reopen it from saved documents.",
-          );
-          setStatus("idle");
-        } finally {
-          finish();
+          reject(new Error("Generated, but the new document couldn't be opened. Pick it from Saved documents."));
         }
       });
-      const fail = () => {
-        setError(
-          "Generation progress is unavailable. Check saved documents before retrying.",
-        );
-        setStatus("idle");
-        finish();
+      source.addEventListener("generation.failed", (e) => {
+        done();
+        let cancelled = false;
+        try {
+          cancelled = !!JSON.parse((e as MessageEvent).data).cancelled;
+        } catch {
+          /* keep default */
+        }
+        reject(new Error(cancelled ? "Generation was cancelled." : "Generation failed. Try again, or check the job's analysis first."));
+      });
+      const lost = () => {
+        done();
+        reject(new Error("Lost the progress stream. Generation continues; check Saved documents in a moment."));
       };
-      source.addEventListener("generation.failed", fail);
-      source.addEventListener("error", fail);
+      source.addEventListener("error", lost);
+      source.addEventListener("end", lost);
     });
   }
 
-  async function loadDocument(documentId: string) {
-    const doc = await apiFetch<GeneratedDocument>(
-      `/api/v1/documents/${documentId}`,
-    );
-    const docClaims = await apiFetch<GeneratedClaim[]>(
-      `/api/v1/documents/${documentId}/claims`,
-    );
-    setDocument(doc);
-    setSavedDocuments((prev) => [doc, ...prev.filter((d) => d.id !== doc.id)]);
-    setSelectedBullet(null);
-    setTemplate(doc.type === "resume" ? doc.template_id : "ats_minimal");
-    setClaims(docClaims);
-    setStatus("done");
-  }
+  const generate = useMutation({
+    mutationFn: async () => {
+      await api.POST("/api/v1/jobs/{job_id}/generate", {
+        params: { path: { job_id: selectedJobId } },
+        body: { mode: "conservative", document_type: documentType },
+      });
+      return waitForGeneration(selectedJobId);
+    },
+    onSuccess: (id) => open(id),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.documents.all });
+      void queryClient.invalidateQueries({ queryKey: qk.overview });
+    },
+  });
 
-  async function exportPdf() {
-    if (!document) return;
-    setExporting(true);
-    setError(null);
-    try {
-      const result = await apiFetch<{
-        page_count: number | null;
-        overflowed: boolean;
-      }>(
-        `/api/v1/documents/${document.id}/export${document.type === "resume" ? `?template=${encodeURIComponent(template)}` : ""}`,
-        { method: "POST" },
-      );
+  const exportPdf = useMutation({
+    mutationFn: async (target: GeneratedDocument) =>
+      unwrap(
+        await api.POST("/api/v1/documents/{document_id}/export", {
+          params: {
+            path: { document_id: target.id },
+            query: target.type === "resume" ? { template: template as "ats_minimal" } : {},
+          },
+        }),
+      ),
+    onSuccess: (result, target) => {
       setLastExport(result);
-      const refreshed = await apiFetch<GeneratedDocument>(
-        `/api/v1/documents/${document.id}`,
-      );
-      setDocument(refreshed);
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Export failed — see worker logs.",
-      );
-    } finally {
-      setExporting(false);
-    }
-  }
+      void queryClient.invalidateQueries({ queryKey: qk.documents.detail(target.id) });
+      void queryClient.invalidateQueries({ queryKey: qk.documents.all, exact: true });
+      void queryClient.invalidateQueries({ queryKey: qk.overview });
+    },
+  });
 
-  async function downloadPdf() {
-    if (!document) return;
-    setError(null);
-    try {
-      // The API checks ownership and returns a short-lived signed URL; the
-      // browser then downloads straight from storage (attachment response).
-      const link = await apiFetch<{ url: string }>(
-        `/api/v1/documents/${document.id}/download?format=pdf`,
-      );
-      window.location.assign(link.url);
-    } catch (err) {
+  const download = useMutation({
+    mutationFn: async ({ target, format }: { target: GeneratedDocument; format: "pdf" | "txt" }) =>
+      unwrap(
+        await api.GET("/api/v1/documents/{document_id}/download", {
+          params: { path: { document_id: target.id }, query: { format } },
+        }),
+      ),
+    // A signed, short-lived URL straight to storage; the response is an
+    // attachment, so the browser downloads without leaving the page.
+    onSuccess: (link) => window.location.assign(link.url),
+    onError: (err, { target }) => {
       if (err instanceof ApiError && err.status === 410) {
-        setDocument({ ...document, pdf_available: false });
-        setError("This export has expired. Export it again to download.");
-      } else {
-        setError("Failed to download PDF.");
+        setNotice("That export has expired (the files were cleared). Export it again to download.");
+        void queryClient.invalidateQueries({ queryKey: qk.documents.detail(target.id) });
       }
-    }
-  }
+    },
+  });
 
-  const activeClaim = claims.find((c) => c.claim_text === selectedBullet);
+  const claimsByText = new Map((claims.data ?? []).map((c) => [c.claim_text, c]));
+  const activeClaim = selectedBullet ? claimsByText.get(selectedBullet) : undefined;
+  const saved = documents.data ?? [];
+  const errors = [documents, jobs, document, claims, generate, exportPdf, download]
+    .filter((q) => q.isError && !(q === download && download.error instanceof ApiError && download.error.status === 410))
+    .map((q) => q.error?.message);
 
   return (
     <div className="flex flex-col xl:flex-row gap-6">
       <div className="flex-1 min-w-0 space-y-4">
-        {loadingDocuments && <Skeleton lines={2} label="Loading saved documents" />}
-        <label className="ph-field" hidden={loadingDocuments}>
-          Saved documents
-          <select
-            value={document?.id || ""}
-            onChange={(e) => {
-              if (e.target.value)
-                void loadDocument(e.target.value).catch(() =>
-                  setError("Could not open document."),
-                );
-            }}
-          >
-            <option value="">Select a saved document</option>
-            {savedDocuments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.type.replace("_", " ")} · {d.id.slice(0, 8)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label id="template" className="ph-field">
+        {documents.isPending ? (
+          <Skeleton lines={2} label="Loading saved documents" />
+        ) : (
+          <label className="ph-field">
+            Saved documents
+            <select value={documentId ?? ""} onChange={(e) => e.target.value && open(e.target.value)}>
+              <option value="">Select a saved document</option>
+              {saved.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.type.replace("_", " ")} · v{d.version} · {new Date(d.created_at).toLocaleDateString()}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="ph-field">
           Resume export template
           <select
-            disabled={document?.type === "cover_letter"}
+            disabled={doc?.type === "cover_letter"}
             value={template}
             onChange={(e) => setTemplate(e.target.value)}
           >
@@ -271,84 +222,104 @@ export function ResumeWorkspace() {
             <option value="modern_editorial">Modern Editorial</option>
           </select>
         </label>
-        <div className="flex flex-wrap gap-2">
-          <select
-            aria-label="Job for document"
-            value={selectedJobId}
-            onChange={(e) => setSelectedJobId(e.target.value)}
-            className="rounded border border-neutral-300 px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-          >
-            <option value="">Select a job...</option>
-            {jobs.map((job) => (
-              <option key={job.id} value={job.id}>
-                {job.role || "Untitled"} {job.company ? `@ ${job.company}` : ""}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Document type"
-            value={documentType}
-            onChange={(e) =>
-              setDocumentType(e.target.value as "resume" | "cover_letter")
-            }
-            className="rounded border border-neutral-300 px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-          >
-            <option value="resume">Resume</option>
-            <option value="cover_letter">Cover letter</option>
-          </select>
+        <div className="ph-toolbar">
+          <label className="ph-field">
+            Job
+            <select value={selectedJobId} onChange={(e) => setSelectedJobId(e.target.value)}>
+              <option value="">Select a job…</option>
+              {(jobs.data ?? []).map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.role || "Untitled"} {job.company ? `@ ${job.company}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="ph-field">
+            Document type
+            <select value={documentType} onChange={(e) => setDocumentType(e.target.value as DocumentType)}>
+              <option value="resume">Resume</option>
+              <option value="cover_letter">Cover letter</option>
+            </select>
+          </label>
           <button
-            onClick={generate}
-            disabled={!selectedJobId || status === "generating"}
-            className="rounded bg-neutral-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
+            type="button"
+            className="ph-button ph-button-primary"
+            onClick={() => generate.mutate()}
+            disabled={!canWrite || !selectedJobId || generate.isPending}
+            title={!canWrite ? DEMO_READ_ONLY : undefined}
           >
-            {status === "generating"
-              ? "Generating..."
+            {generate.isPending
+              ? "Generating and verifying…"
               : `Generate ${documentType === "resume" ? "resume" : "cover letter"}`}
           </button>
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {generate.isPending && (
+          <p role="status" className="text-sm">
+            Planning positioning, writing, then verifying every claim against your evidence.
+            This takes a minute on the free model tier.
+          </p>
+        )}
+        {notice && (
+          <p className="ph-banner ph-banner-warn" role="alert">
+            {notice}
+          </p>
+        )}
+        {errors.map((message, i) => (
+          <p key={i} className="ph-error" role="alert">
+            {message}
+          </p>
+        ))}
 
-        {document && (
-          <div className="flex flex-wrap gap-2">
+        {doc && (
+          <div className="ph-toolbar">
             <button
+              type="button"
               id="export"
-              onClick={exportPdf}
-              disabled={exporting}
-              className="rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
+              className="ph-button"
+              onClick={() => exportPdf.mutate(doc)}
+              disabled={exportPdf.isPending}
             >
-              {exporting ? "Exporting..." : "Export PDF"}
+              {exportPdf.isPending ? "Exporting…" : doc.pdf_available ? "Re-export PDF" : "Export PDF"}
             </button>
-            {document.pdf_available && (
+            {doc.pdf_available && (
               <button
-                onClick={downloadPdf}
-                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white"
+                type="button"
+                className="ph-button ph-button-primary"
+                onClick={() => download.mutate({ target: doc, format: "pdf" })}
+                disabled={download.isPending}
               >
                 Download PDF
               </button>
             )}
+            {doc.plaintext_available && (
+              <button
+                type="button"
+                className="ph-button"
+                onClick={() => download.mutate({ target: doc, format: "txt" })}
+                disabled={download.isPending}
+              >
+                Download plain text
+              </button>
+            )}
             <button
               type="button"
+              className="ph-button"
               onClick={() => setShowPreview((v) => !v)}
               aria-pressed={showPreview}
-              className="rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
             >
               {showPreview ? "Hide preview" : "Show preview"}
             </button>
-            <label className="ph-field text-sm">
+            <label className="ph-field">
               Compare with
-              <select
-                aria-label="Compare with another document"
-                value={compareId}
-                onChange={(e) => setCompareId(e.target.value)}
-              >
+              <select value={compareId} onChange={(e) => setCompareId(e.target.value)}>
                 <option value="">— none —</option>
-                {savedDocuments
-                  .filter((d) => d.id !== document.id && d.type === document.type)
+                {saved
+                  .filter((d) => d.id !== doc.id && d.type === doc.type)
                   .map((d) => (
                     <option key={d.id} value={d.id}>
-                      v{d.version} · {d.template_id} · {d.id.slice(0, 8)}
-                      {d.job_id === document.job_id ? " (same job)" : ""}
+                      v{d.version} · {d.template_id} · {new Date(d.created_at).toLocaleDateString()}
+                      {d.job_id === doc.job_id ? " (same job)" : ""}
                     </option>
                   ))}
               </select>
@@ -358,129 +329,114 @@ export function ResumeWorkspace() {
 
         {lastExport?.overflowed && (
           <p role="alert" className="ph-error">
-            This resume rendered to {lastExport.page_count} pages. Most ATS
-            parsers weight first-page content; consider trimming bullets or
-            switching to the Technical Dense template.
+            This resume rendered to {lastExport.page_count} pages. Most ATS parsers weight
+            first-page content; consider trimming bullets or switching to the Technical Dense
+            template.
           </p>
         )}
 
-        {document && compareId && (
+        {doc && compareId && (
           <DocumentDiff
-            before={savedDocuments.find((d) => d.id === compareId)?.content_json}
-            after={document.content_json}
-            beforeLabel={`v${savedDocuments.find((d) => d.id === compareId)?.version ?? "?"}`}
-            afterLabel={`v${document.version}`}
+            before={saved.find((d) => d.id === compareId)?.content_json}
+            after={doc.content_json}
+            beforeLabel={`v${saved.find((d) => d.id === compareId)?.version ?? "?"}`}
+            afterLabel={`v${doc.version}`}
           />
         )}
 
-        {document && document.type === "resume" && (
+        {document.isPending && documentId && <Skeleton lines={6} label="Loading document" />}
+
+        {doc && doc.type === "resume" && (
           <div className="space-y-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-            <p className="text-sm">
-              {(document.content_json as ResumeContent).summary}
-            </p>
+            <p className="text-sm">{(doc.content_json as ResumeContent).summary}</p>
             <div className="flex flex-wrap gap-1">
-              {(document.content_json as ResumeContent).skills.map((s) => (
-                <span
-                  key={s}
-                  className="rounded bg-neutral-100 px-2 py-0.5 text-xs dark:bg-neutral-800"
-                >
+              {(doc.content_json as ResumeContent).skills.map((s) => (
+                <span key={s} className="rounded bg-neutral-100 px-2 py-0.5 text-xs dark:bg-neutral-800">
                   {s}
                 </span>
               ))}
             </div>
-            {(document.content_json as ResumeContent).experience.map(
-              (entry, i) => (
-                <div key={i}>
-                  <div className="text-sm font-medium">
-                    {entry.title} — {entry.employer} ({entry.start_date}–
-                    {entry.end_date})
-                  </div>
-                  <ul className="ml-4 list-disc space-y-1 text-sm">
-                    {entry.bullets.map((bullet, j) => {
-                      const claim = claims.find((c) => c.claim_text === bullet);
-                      return (
-                        <li
-                          key={j}
-                          className={`cursor-pointer border-l-2 pl-2 hover:bg-neutral-50 dark:hover:bg-neutral-900 ${
-                            claim
-                              ? STATUS_COLOR[claim.verification_status]
-                              : "border-transparent"
-                          }`}
-                        >
-                          <button
-                            className="text-left"
-                            onClick={() => setSelectedBullet(bullet)}
-                          >
-                            {bullet}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+            {(doc.content_json as ResumeContent).experience.map((entry, i) => (
+              <div key={i}>
+                <div className="text-sm font-medium">
+                  {entry.title} — {entry.employer} ({entry.start_date}–{entry.end_date})
                 </div>
-              ),
-            )}
+                <ul className="ml-4 list-disc space-y-1 text-sm">
+                  {entry.bullets.map((bullet, j) => {
+                    const claim = claimsByText.get(bullet);
+                    return (
+                      <li
+                        key={j}
+                        className={`border-l-2 pl-2 hover:bg-neutral-50 dark:hover:bg-neutral-900 ${
+                          claim ? STATUS_COLOR[claim.verification_status] : "border-transparent"
+                        }`}
+                      >
+                        <button className="text-left" onClick={() => setSelectedBullet(bullet)}>
+                          {bullet}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </div>
         )}
 
-        {document && document.type === "cover_letter" && (
+        {doc && doc.type === "cover_letter" && (
           <div className="space-y-2 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-            {(document.content_json as CoverLetterContent).body_paragraphs.map(
-              (paragraph, i) => {
-                const claim = claims.find((c) => c.claim_text === paragraph);
-                return (
-                  <p
-                    key={i}
-                    className={`cursor-pointer border-l-2 pl-2 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 ${
-                      claim
-                        ? STATUS_COLOR[claim.verification_status]
-                        : "border-transparent"
-                    }`}
-                  >
-                    <button
-                      className="text-left"
-                      onClick={() => setSelectedBullet(paragraph)}
-                    >
-                      {paragraph}
-                    </button>
-                  </p>
-                );
-              },
-            )}
+            {(doc.content_json as CoverLetterContent).body_paragraphs.map((paragraph, i) => {
+              const claim = claimsByText.get(paragraph);
+              return (
+                <p
+                  key={i}
+                  className={`border-l-2 pl-2 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 ${
+                    claim ? STATUS_COLOR[claim.verification_status] : "border-transparent"
+                  }`}
+                >
+                  <button className="text-left" onClick={() => setSelectedBullet(paragraph)}>
+                    {paragraph}
+                  </button>
+                </p>
+              );
+            })}
           </div>
+        )}
+
+        {!documentId && !documents.isPending && saved.length === 0 && (
+          <p className="text-sm text-neutral-500">
+            No documents yet. Pick an analyzed job above and generate one.
+          </p>
         )}
       </div>
 
-      {document && showPreview && (
+      {doc && showPreview && (
         <div className="w-full shrink-0 xl:w-96">
-          <DocumentPreview documentId={document.id} template={template} />
+          <DocumentPreview documentId={doc.id} template={template} />
         </div>
       )}
 
       {activeClaim && (
-        <div className="w-72 shrink-0 space-y-2 rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+        <aside
+          className="w-72 shrink-0 space-y-2 rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-800"
+          aria-label="Claim provenance"
+          aria-live="polite"
+        >
           <div className="font-medium">Provenance</div>
           <div>
-            Status:{" "}
-            <span className="font-mono">{activeClaim.verification_status}</span>
+            Status: <span className="font-mono">{activeClaim.verification_status}</span>
           </div>
-          {activeClaim.evidence_title && (
-            <div>Evidence: {activeClaim.evidence_title}</div>
-          )}
+          {activeClaim.evidence_title && <div>Evidence: {activeClaim.evidence_title}</div>}
           {activeClaim.evidence_repository && (
-            <div className="font-mono text-xs">
-              {activeClaim.evidence_repository}
-            </div>
+            <div className="font-mono text-xs">{activeClaim.evidence_repository}</div>
           )}
           {activeClaim.source_locator && (
-            <div className="font-mono text-xs text-neutral-500">
-              {activeClaim.source_locator}
-            </div>
+            <div className="font-mono text-xs text-neutral-500">{activeClaim.source_locator}</div>
           )}
           <div className="text-xs text-neutral-500">
             confidence {Math.round(activeClaim.confidence * 100)}%
           </div>
-        </div>
+        </aside>
       )}
     </div>
   );

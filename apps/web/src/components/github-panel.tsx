@@ -1,178 +1,257 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button, Skeleton } from "@proofhire/design-system/ui";
+import { api, unwrap } from "@/lib/api-client";
 import { openRunEvents } from "@/lib/events";
-import { apiFetch, ApiError, getAccessToken } from "@/lib/api";
+import { qk, useOverview, useRepositories, type Repository } from "@/lib/queries";
+import { useSession } from "@/lib/session";
+import { DEMO_READ_ONLY } from "./session-ui";
 
-type Repository = {
-  id: string;
-  owner: string;
-  name: string;
-  url: string;
-  selected: boolean;
-  sync_status: string;
-  last_analyzed_sha: string | null;
-};
+type ProgressLine = { id: number; text: string; tone?: "done" | "error" };
 
-type SyncTriggerResponse = { run_id: string; status: string };
+/** Human-readable lines for the worker's run events (RunEventName). */
+function describe(event: string, data: Record<string, unknown>, repos: Repository[]): string | null {
+  const name = (id: unknown) => {
+    const repo = repos.find((r) => r.id === id);
+    return repo ? `${repo.owner}/${repo.name}` : "repository";
+  };
+  switch (event) {
+    case "github.sync.started":
+      return "Sync started";
+    case "github.repo.analyzing":
+      return `Analyzing ${data.owner}/${data.name}…`;
+    case "github.repo.completed": {
+      const scanned = Number(data.files_scanned ?? 0);
+      const changed = Number(data.artifacts_created ?? 0);
+      const stale = Number(data.evidence_marked_stale ?? 0);
+      return `${name(data.repository_id)}: ${scanned} relevant files, ${changed} new or changed${
+        stale ? `, ${stale} evidence items marked stale` : ""
+      }`;
+    }
+    case "evidence.created":
+      return typeof data.title === "string" ? `Evidence found: ${data.title}` : null;
+    case "github.sync.completed":
+      return "Sync complete. Evidence extraction for changed files continues in the background.";
+    case "github.sync.failed":
+      return typeof data.message === "string" ? data.message : "Sync failed.";
+    default:
+      return null;
+  }
+}
 
 /**
- * Phase 1 demo surface (PRD §9.1 onboarding): connect GitHub, select repos,
- * trigger sync, watch progress over SSE. Superseded by the full onboarding flow
- * and Home command center in later phases.
+ * GitHub connection and repository sync (PRD §9.1). Lives in Settings
+ * because that's where the OAuth callback returns the browser.
  */
 export function GitHubPanel() {
-  const [authed, setAuthed] = useState(false);
-  const [repos, setRepos] = useState<Repository[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [runId, setRunId] = useState<string | null>(null);
-  const [progress, setProgress] = useState<string[]>([]);
+  const { canWrite } = useSession();
+  const queryClient = useQueryClient();
+  const overview = useOverview();
+  const repositories = useRepositories();
+  const [progress, setProgress] = useState<ProgressLine[]>([]);
+  const [running, setRunning] = useState(false);
+  const closeStream = useRef<(() => void) | null>(null);
+  useEffect(() => () => closeStream.current?.(), []);
 
-  async function loadRepositories() {
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await apiFetch<Repository[]>("/api/v1/github/repositories");
-      setRepos(list);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load repositories");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const repos = repositories.data ?? [];
+  const connected = overview.data?.github.connected ?? false;
 
-  useEffect(() => {
-    setAuthed(!!getAccessToken());
-  }, []);
+  const connect = useMutation({
+    mutationFn: async () => unwrap(await api.POST("/api/v1/github/connect")),
+    onSuccess: ({ authorize_url }) => window.location.assign(authorize_url),
+  });
+  const disconnect = useMutation({
+    mutationFn: async () => {
+      await api.DELETE("/api/v1/github/connection");
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.overview });
+      void queryClient.invalidateQueries({ queryKey: qk.repositories });
+    },
+  });
+  const refresh = useMutation({
+    mutationFn: async () => unwrap(await api.POST("/api/v1/github/repositories/refresh")),
+    onSuccess: (list) => queryClient.setQueryData(qk.repositories, list),
+  });
+  const toggle = useMutation({
+    mutationFn: async (repo: Repository) =>
+      unwrap(
+        await api.PATCH("/api/v1/github/repositories/{repository_id}", {
+          params: { path: { repository_id: repo.id } },
+          body: { selected: !repo.selected },
+        }),
+      ),
+    // Optimistic: the checkbox answers immediately; rolled back on failure.
+    onMutate: async (repo) => {
+      await queryClient.cancelQueries({ queryKey: qk.repositories });
+      const previous = queryClient.getQueryData<Repository[]>(qk.repositories);
+      queryClient.setQueryData<Repository[]>(qk.repositories, (list) =>
+        list?.map((r) => (r.id === repo.id ? { ...r, selected: !r.selected } : r)),
+      );
+      return { previous };
+    },
+    onError: (_err, _repo, context) => queryClient.setQueryData(qk.repositories, context?.previous),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: qk.repositories }),
+  });
+  const sync = useMutation({
+    mutationFn: async (ids: string[]) =>
+      unwrap(await api.POST("/api/v1/github/sync", { body: { repository_ids: ids } })),
+    onSuccess: ({ run_id }) => watch(run_id),
+  });
 
-  useEffect(() => {
-    if (!authed) return;
-    void loadRepositories();
-  }, [authed]);
-
-  useEffect(() => {
-    if (!runId) return;
+  function watch(runId: string) {
+    closeStream.current?.();
+    setRunning(true);
+    let lineId = 0;
+    const push = (text: string, tone?: ProgressLine["tone"]) =>
+      setProgress((prev) => [...prev, { id: ++lineId, text, tone }]);
     const source = openRunEvents(runId);
-    source.addEventListener("message", (e) => {
-      setProgress((prev) => [...prev, (e as MessageEvent).data]);
-    });
-    // Named-event listeners for the specific event types the worker publishes.
-    for (const name of ["github.sync.started", "github.repo.analyzing", "github.repo.completed"]) {
-      source.addEventListener(name, (e) => {
-        setProgress((prev) => [...prev, `${name}: ${(e as MessageEvent).data}`]);
+    const finish = () => {
+      source.close();
+      closeStream.current = null;
+      setRunning(false);
+      for (const key of [qk.repositories, qk.overview, qk.evidence.all]) {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
+    };
+    closeStream.current = finish;
+    for (const event of [
+      "github.sync.started",
+      "github.repo.analyzing",
+      "github.repo.completed",
+      "evidence.created",
+      "github.sync.completed",
+      "github.sync.failed",
+    ]) {
+      source.addEventListener(event, (e) => {
+        let data: Record<string, unknown> = {};
+        try {
+          data = JSON.parse((e as MessageEvent).data);
+        } catch {
+          /* keep empty */
+        }
+        const text = describe(event, data, repos);
+        const tone = event === "github.sync.failed" ? "error" : event.endsWith("completed") ? "done" : undefined;
+        if (text) push(text, tone);
+        // Exactly one terminal event per run, success or failure (sync.py).
+        if (event === "github.sync.completed" || event === "github.sync.failed") finish();
       });
     }
-    return () => source.close();
-  }, [runId]);
-
-  async function connectGitHub() {
-    setError(null);
-    try {
-      const result = await apiFetch<{ authorize_url: string }>("/api/v1/github/connect", {
-        method: "POST",
-      });
-      window.location.href = result.authorize_url;
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to start GitHub connect");
-    }
-  }
-
-
-
-  async function refreshFromGitHub() {
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await apiFetch<Repository[]>("/api/v1/github/repositories/refresh", {
-        method: "POST",
-      });
-      setRepos(list);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to refresh from GitHub");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function toggleSelected(repo: Repository) {
-    const updated = await apiFetch<Repository>(`/api/v1/github/repositories/${repo.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ selected: !repo.selected }),
+    source.addEventListener("error", () => {
+      push("Lost the progress stream. The sync keeps running; refresh to see results.", "error");
+      finish();
     });
-    setRepos((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
   }
 
-  async function triggerSync() {
-    const selectedIds = repos.filter((r) => r.selected).map((r) => r.id);
-    if (selectedIds.length === 0) return;
-    setProgress([]);
-    const result = await apiFetch<SyncTriggerResponse>("/api/v1/github/sync", {
-      method: "POST",
-      body: JSON.stringify({ repository_ids: selectedIds }),
-    });
-    setRunId(result.run_id);
-  }
+  if (overview.isPending || repositories.isPending) return <Skeleton lines={4} label="Loading GitHub connection" />;
 
-  if (!authed) {
-    return <p className="text-sm text-neutral-500">Log in above to connect GitHub.</p>;
-  }
+  const selectedIds = repos.filter((r) => r.selected).map((r) => r.id);
+  const readOnly = !canWrite;
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <button
-          onClick={connectGitHub}
-          className="rounded bg-neutral-900 px-3 py-1.5 text-sm text-white dark:bg-neutral-100 dark:text-neutral-900"
+      <p className="text-sm">
+        {connected ? (
+          <>
+            Connected as <strong>@{overview.data?.github.login}</strong>.
+          </>
+        ) : (
+          "Not connected. ProofHire asks for read access to your repositories to find evidence."
+        )}
+      </p>
+      <div className="ph-toolbar">
+        <Button
+          className={connected ? "" : "ph-button-primary"}
+          disabled={readOnly || connect.isPending}
+          title={readOnly ? DEMO_READ_ONLY : undefined}
+          onClick={() => connect.mutate()}
         >
-          Connect GitHub
-        </button>
-        <button
-          onClick={refreshFromGitHub}
-          disabled={loading}
-          className="rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
-        >
-          Refresh repositories
-        </button>
+          {connected ? "Reconnect GitHub" : "Connect GitHub"}
+        </Button>
+        {connected && (
+          <>
+            <Button
+              disabled={readOnly || refresh.isPending}
+              title={readOnly ? DEMO_READ_ONLY : undefined}
+              onClick={() => refresh.mutate()}
+            >
+              {refresh.isPending ? "Fetching…" : "Refresh repository list"}
+            </Button>
+            <Button
+              disabled={readOnly || disconnect.isPending}
+              title={readOnly ? DEMO_READ_ONLY : undefined}
+              onClick={() => {
+                if (window.confirm("Disconnect GitHub? Your repositories list is removed; evidence you've already reviewed is kept.")) {
+                  disconnect.mutate();
+                }
+              }}
+            >
+              Disconnect
+            </Button>
+          </>
+        )}
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      {repos.length > 0 && (
-        <ul className="space-y-1">
-          {repos.map((repo) => (
-            <li key={repo.id} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={repo.selected}
-                onChange={() => toggleSelected(repo)}
-              />
-              <span>
-                {repo.owner}/{repo.name}
-              </span>
-              <span className="text-xs text-neutral-500">({repo.sync_status})</span>
-            </li>
-          ))}
-        </ul>
+      {[connect, disconnect, refresh, toggle, sync].map(
+        (m, i) =>
+          m.isError && (
+            <p key={i} className="ph-error" role="alert">
+              {m.error.message}
+            </p>
+          ),
       )}
 
       {repos.length > 0 && (
-        <button
-          onClick={triggerSync}
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white"
-        >
-          Sync selected repositories
-        </button>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Repositories to analyze</legend>
+          <ul className="ph-repo-list">
+            {repos.map((repo) => (
+              <li key={repo.id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={repo.selected}
+                    disabled={readOnly}
+                    onChange={() => toggle.mutate(repo)}
+                  />
+                  <span>
+                    {repo.owner}/{repo.name}
+                  </span>
+                  <span className="text-xs text-neutral-500">{repo.sync_status}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <Button
+            className="ph-button-primary"
+            disabled={readOnly || running || sync.isPending || selectedIds.length === 0}
+            title={readOnly ? DEMO_READ_ONLY : undefined}
+            onClick={() => {
+              setProgress([]);
+              sync.mutate(selectedIds);
+            }}
+          >
+            {running ? "Syncing…" : `Sync ${selectedIds.length} selected`}
+          </Button>
+        </fieldset>
+      )}
+      {connected && repos.length === 0 && (
+        <p className="text-sm text-neutral-500">
+          No repositories yet — use “Refresh repository list” to fetch them from GitHub.
+        </p>
       )}
 
       {progress.length > 0 && (
-        <div className="rounded border border-neutral-200 p-2 text-xs font-mono dark:border-neutral-800">
-          {progress.map((line, i) => (
-            <div key={i}>{line}</div>
+        <ol className="ph-progress" aria-live="polite">
+          {progress.map((line) => (
+            <li key={line.id} data-tone={line.tone}>
+              {line.text}
+            </li>
           ))}
-        </div>
+        </ol>
       )}
     </div>
   );
 }
-

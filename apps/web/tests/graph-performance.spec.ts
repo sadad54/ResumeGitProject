@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync, mkdirSync } from "node:fs";
+import { mockApi } from "./api-mocks";
 
 /**
  * Graph FPS at 100 / 500 / 1,000 nodes (checklist Track D "Frontend").
@@ -56,16 +57,13 @@ test.describe.configure({ mode: "serial" });
 for (const size of SIZES) {
   test(`graph renders and pans at ${size} nodes`, async ({ page, browserName }) => {
     const graph = syntheticGraph(size);
-    await page.addInitScript(() => localStorage.setItem("proofhire.access_token", "fixture-token"));
-    await page.route("**/api/v1/**", async (route) => {
-      const url = new URL(route.request().url());
-      const body = url.pathname.endsWith("/evidence/graph")
+    await mockApi(page, (path) =>
+      path.endsWith("/evidence/graph")
         ? graph
-        : url.pathname.endsWith("/jobs")
+        : path.endsWith("/jobs")
           ? [{ id: "job1", role: "Backend Engineer", company: "Fixture", status: "ready" }]
-          : [];
-      await route.fulfill({ json: body });
-    });
+          : undefined,
+    );
 
     const t0 = Date.now();
     await page.goto("/evidence");

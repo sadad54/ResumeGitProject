@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { apiFetch, getAccessToken } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@proofhire/design-system/ui";
+import { api, unwrap } from "@/lib/api-client";
+import { qk } from "@/lib/queries";
+import { useSession } from "@/lib/session";
+import { DEMO_READ_ONLY } from "./session-ui";
 
 type Capture = {
   capture_id: string;
@@ -32,9 +36,12 @@ export function CaptureHandoff({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [jobId, setJobId] = useState("");
-  const [signedIn, setSignedIn] = useState(false);
+  // Signing in on another tab updates this page by itself (the session
+  // provider follows localStorage across tabs), so no "check again" step.
+  const { status, canWrite } = useSession();
+  const signedIn = status === "authenticated";
+  const queryClient = useQueryClient();
   useEffect(() => {
-    setSignedIn(!!getAccessToken());
     const runtime = (
       window as unknown as { chrome?: { runtime?: ExtensionRuntime } }
     ).chrome?.runtime;
@@ -78,11 +85,9 @@ export function CaptureHandoff({
     setBusy(true);
     setError("");
     try {
-      const job = await apiFetch<{ id: string }>("/api/v1/jobs/capture", {
-        method: "POST",
-        body: JSON.stringify(capture),
-      });
+      const job = unwrap(await api.POST("/api/v1/jobs/capture", { body: capture }));
       setJobId(job.id);
+      void queryClient.invalidateQueries({ queryKey: qk.jobs.all });
       const runtime = (
         window as unknown as { chrome?: { runtime?: ExtensionRuntime } }
       ).chrome?.runtime;
@@ -110,19 +115,16 @@ export function CaptureHandoff({
           {error}
         </p>
       )}
-      {!signedIn && (
+      {status === "anonymous" && (
         <p>
-          Sign in on{" "}
-          <Link href="/" target="_blank" className="ph-text-button">
-            Home in a new tab
+          <Link href="/#sign-in" target="_blank" className="ph-text-button">
+            Sign in in a new tab
           </Link>
-          , then{" "}
-          <Button onClick={() => setSignedIn(!!getAccessToken())}>
-            Check sign-in
-          </Button>
-          . Your session stays in the web app.
+          ; this page picks up the session as soon as you do. Your session stays in the
+          web app.
         </p>
       )}
+      {signedIn && !canWrite && <p role="note">{DEMO_READ_ONLY}.</p>}
       {capture && !jobId && (
         <>
           <p className="text-sm">
@@ -147,7 +149,7 @@ export function CaptureHandoff({
           </label>
           <Button
             disabled={
-              !signedIn || busy || capture.selected_text.trim().length < 40
+              !canWrite || busy || capture.selected_text.trim().length < 40
             }
             onClick={() => void submit()}
           >

@@ -2,203 +2,173 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { apiFetch, getAccessToken } from "@/lib/api";
-import { api, type components } from "@/lib/api-client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@proofhire/design-system/ui";
+import { api, unwrap } from "@/lib/api-client";
+import { qk, useJob, useJobs } from "@/lib/queries";
+import { useSession } from "@/lib/session";
 import { EvidenceConstellation } from "./evidence-constellation";
-import { Button, EmptyState } from "@proofhire/design-system/ui";
+import { DEMO_READ_ONLY, RequireSession } from "./session-ui";
 
-// Generated from the API's OpenAPI document — a backend change to JobPublic
-// fails `npm run typecheck` here rather than surfacing as undefined at runtime.
-type Job = components["schemas"]["JobPublic"];
+const IN_PROGRESS = ["analyzing", "matching", "analyzed"];
+const RETRYABLE = ["captured", "failed", "coverage_failed", "cancelled"];
 
 export function JobWorkspace({ initialJobId = "" }: { initialJobId?: string }) {
-  const [jdText, setJdText] = useState("");
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [selectedId, setSelectedId] = useState(initialJobId);
-  const [job, setJob] = useState<Job | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [signedIn, setSignedIn] = useState(false);
-  const [revision, setRevision] = useState(0);
-  useEffect(() => {
-    setSignedIn(!!getAccessToken());
-    if (getAccessToken())
-      api
-        .GET("/api/v1/jobs")
-        .then(({ data }) => setJobs(data ?? []))
-        .catch(() => setError("Could not load saved jobs."));
-  }, [revision]);
-  useEffect(() => setSelectedId(initialJobId), [initialJobId]);
-  useEffect(() => {
-    if (!selectedId || !getAccessToken()) return;
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    let attempts = 0;
-    setJob(null);
-    setError("");
-    async function poll() {
-      try {
-        const { data: current } = await api.GET("/api/v1/jobs/{job_id}", {
-          params: { path: { job_id: selectedId } },
-          signal: controller.signal,
-        });
-        if (!current) throw new Error("Job not found.");
-        setJob(current);
-        if (["analyzing", "matching", "analyzed"].includes(current.status)) {
-          if (++attempts < 90) timer = setTimeout(poll, 2000);
-          else
-            setError(
-              "Analysis is still running. Refresh status to check again.",
-            );
-        }
-      } catch (err) {
-        if (!controller.signal.aborted)
-          setError(err instanceof Error ? err.message : "Could not open job.");
-      }
-    }
-    void poll();
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [selectedId, revision]);
+  return (
+    <RequireSession what="analyze a job">
+      <Workspace initialJobId={initialJobId} />
+    </RequireSession>
+  );
+}
 
-  async function analyze(id?: string) {
-    setBusy(true);
-    setError("");
-    try {
-      const target =
-        id ||
-        (
-          await apiFetch<Job>("/api/v1/jobs/capture", {
-            method: "POST",
-            body: JSON.stringify({
-              selected_text: jdText,
-              captured_at: new Date().toISOString(),
-            }),
-          })
-        ).id;
-      await apiFetch(`/api/v1/jobs/${target}/analyze`, { method: "POST" });
-      setSelectedId(target);
-      setRevision((v) => v + 1);
-      window.history.replaceState(
-        null,
-        "",
-        `/jobs?job=${encodeURIComponent(target)}`,
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not analyze job.");
-    } finally {
-      setBusy(false);
+function selectInUrl(id: string) {
+  window.history.replaceState(null, "", id ? `/jobs?job=${encodeURIComponent(id)}` : "/jobs");
+}
+
+function Workspace({ initialJobId }: { initialJobId: string }) {
+  const { canWrite } = useSession();
+  const queryClient = useQueryClient();
+  const [jdText, setJdText] = useState("");
+  const [selectedId, setSelectedId] = useState(initialJobId);
+  useEffect(() => setSelectedId(initialJobId), [initialJobId]);
+
+  const jobs = useJobs();
+  const job = useJob(selectedId);
+  const status = job.data?.status;
+
+  // When analysis settles, the graph's requirement overlay has changed.
+  useEffect(() => {
+    if (status === "ready" || status === "coverage_failed") {
+      void queryClient.invalidateQueries({ queryKey: qk.evidence.graph(selectedId) });
+      void queryClient.invalidateQueries({ queryKey: qk.overview });
     }
-  }
-  if (!signedIn)
-    return (
-      <EmptyState title="Find where your evidence fits" level="h2">
-        Log in on Home to capture and analyze a job.
-      </EmptyState>
-    );
+  }, [status, selectedId, queryClient]);
+
+  const analyze = useMutation({
+    mutationFn: async (existingId?: string) => {
+      const id =
+        existingId ??
+        unwrap(
+          await api.POST("/api/v1/jobs/capture", {
+            body: { selected_text: jdText, captured_at: new Date().toISOString() },
+          }),
+        ).id;
+      await api.POST("/api/v1/jobs/{job_id}/analyze", { params: { path: { job_id: id } } });
+      return id;
+    },
+    onSuccess: (id, existingId) => {
+      if (!existingId) setJdText("");
+      setSelectedId(id);
+      selectInUrl(id);
+      void queryClient.invalidateQueries({ queryKey: qk.jobs.all });
+    },
+  });
+  const cancel = useMutation({
+    mutationFn: async (id: string) => {
+      await api.POST("/api/v1/jobs/{job_id}/cancel", { params: { path: { job_id: id } } });
+    },
+    onSettled: (_d, _e, id) => queryClient.invalidateQueries({ queryKey: qk.jobs.detail(id) }),
+  });
+
+  const readOnly = !canWrite;
+  const current = job.data;
   return (
     <div className="space-y-6">
       <section id="capture">
         <label className="ph-field">
           Job description
           <textarea
-            autoFocus={false}
             value={jdText}
             onChange={(e) => setJdText(e.target.value)}
             rows={6}
             maxLength={60000}
-            placeholder="Paste the role you have in mind…"
+            placeholder={readOnly ? "The demo is read-only — open a saved job below." : "Paste the role you have in mind…"}
+            disabled={readOnly}
           />
         </label>
         <div className="ph-toolbar mt-3">
           <Button
-            disabled={busy || jdText.trim().length < 40}
-            onClick={() => void analyze()}
+            disabled={readOnly || analyze.isPending || jdText.trim().length < 40}
+            title={readOnly ? DEMO_READ_ONLY : undefined}
+            onClick={() => analyze.mutate(undefined)}
           >
-            {busy ? "Starting analysis…" : "Analyze job →"}
+            {analyze.isPending ? "Starting analysis…" : "Analyze job →"}
           </Button>
-          <span className="text-xs">
-            At least 40 characters. Your work supplies the proof.
-          </span>
+          <span className="text-xs">At least 40 characters. Your work supplies the proof.</span>
         </div>
       </section>
+
       <label className="ph-field">
         Reopen a saved job
         <select
           value={selectedId}
           onChange={(e) => {
             setSelectedId(e.target.value);
-            window.history.replaceState(
-              null,
-              "",
-              `/jobs?job=${encodeURIComponent(e.target.value)}`,
-            );
+            selectInUrl(e.target.value);
           }}
         >
           <option value="">Select a job</option>
-          {jobs.map((j) => (
+          {(jobs.data ?? []).map((j) => (
             <option key={j.id} value={j.id}>
               {j.role || "Untitled job"} {j.company ? `· ${j.company}` : ""}
             </option>
           ))}
         </select>
       </label>
-      {error && (
-        <p className="ph-error" role="alert">
-          {error}
-        </p>
+
+      {[jobs, job].map(
+        (q, i) =>
+          q.isError && (
+            <p key={i} className="ph-error" role="alert">
+              {q.error.message}
+            </p>
+          ),
       )}
-      {job && (
+      {[analyze, cancel].map(
+        (m, i) =>
+          m.isError && (
+            <p key={`m${i}`} className="ph-error" role="alert">
+              {m.error.message}
+            </p>
+          ),
+      )}
+
+      {current && (
         <>
           <div className="ph-toolbar">
             <div className="flex-1">
               <h2 className="text-xl font-semibold">
-                {job.role || "Captured job"}
-                {job.company ? ` · ${job.company}` : ""}
+                {current.role || "Captured job"}
+                {current.company ? ` · ${current.company}` : ""}
               </h2>
               <p role="status" className="text-sm mt-2">
-                Status: {job.status.replaceAll("_", " ")}
+                Status: {current.status.replaceAll("_", " ")}
+                {IN_PROGRESS.includes(current.status) && " · updating automatically"}
               </p>
             </div>
-            <Button onClick={() => setRevision((v) => v + 1)}>
-              Refresh status
-            </Button>
-            {["analyzing", "matching"].includes(job.status) && (
+            {IN_PROGRESS.slice(0, 2).includes(current.status) && (
               <Button
-                onClick={() =>
-                  void api
-                    .POST("/api/v1/jobs/{job_id}/cancel", {
-                      params: { path: { job_id: job.id } },
-                    })
-                    .then(() => setRevision((v) => v + 1))
-                    .catch(() => setError("Could not cancel the job."))
-                }
+                disabled={readOnly || cancel.isPending}
+                title={readOnly ? DEMO_READ_ONLY : undefined}
+                onClick={() => cancel.mutate(current.id)}
               >
                 Cancel analysis
               </Button>
             )}
-            {["captured", "failed", "coverage_failed", "cancelled"].includes(job.status) && (
-              <Button disabled={busy} onClick={() => void analyze(job.id)}>
-                {job.status === "captured"
-                  ? "Analyze captured job"
-                  : "Retry analysis"}
+            {RETRYABLE.includes(current.status) && (
+              <Button
+                disabled={readOnly || analyze.isPending}
+                title={readOnly ? DEMO_READ_ONLY : undefined}
+                onClick={() => analyze.mutate(current.id)}
+              >
+                {current.status === "captured" ? "Analyze captured job" : "Retry analysis"}
               </Button>
             )}
-            <Link className="ph-button" href={`/documents?job=${job.id}`}>
+            <Link className="ph-button" href={`/documents?job=${current.id}`}>
               Create a document ↗
             </Link>
           </div>
-          <EvidenceConstellation
-            jobId={job.id}
-            refreshKey={
-              revision +
-              (job.status === "ready" || job.status === "coverage_failed"
-                ? 1000
-                : 0)
-            }
-          />
+          <EvidenceConstellation jobId={current.id} />
         </>
       )}
     </div>

@@ -121,6 +121,15 @@ Lighthouse 13, desktop preset, production build via `next start`. INP is a field
 
 PRD targets (Performance ≥ 90, Accessibility ≥ 95, Best Practices ≥ 95) are met on every route.
 
+**Initial JS after the TanStack Query / session migration (2026-09-27)**
+(`js-payload.json`, re-measured by `tests/js-payload.spec.ts`): 626 KiB on
+most routes (was 564), 630 on `/jobs`, 660 on `/settings`, and `/evidence`
+626 (was 475 — it now loads the same shared chunks as every other page).
+The +62 KiB uncompressed is TanStack Query and the session / typed-client
+layer, both shared chunks: the price of a real client cache, one-flight
+session renewal and compile-time API contracts on every call. The Lighthouse
+table above predates this change and is re-measured in the final pass.
+
 Graph FPS: synthetic graph through the real React Flow canvas, rAF frames counted during ~2 s of scripted wheel panning (`tests/graph-performance.spec.ts`). `rendered` is the number of node elements in the DOM, which stays ~39 at every size because the canvas uses React Flow's `onlyRenderVisibleElements` viewport virtualization — that is the checklist's "virtualized rendering" item, confirmed by measurement rather than by reading the prop.
 
 | Graph nodes | Edges | DOM nodes rendered | Time to first node | Pan FPS |
