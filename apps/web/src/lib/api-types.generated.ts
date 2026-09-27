@@ -411,7 +411,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Callback */
+        /**
+         * Callback
+         * @description GitHub sends the browser here after the consent screen, so every
+         *     outcome must send it back to the web app. This used to require `code`
+         *     and raise on failure, so clicking Cancel on GitHub (which returns
+         *     `error=access_denied` and no code) left the user on the API's domain
+         *     looking at a JSON 422. Reasons are short fixed codes, never GitHub's
+         *     free-text error, since they end up in a URL the web app renders.
+         */
         get: operations["callback_api_v1_github_callback_get"];
         put?: never;
         post?: never;
@@ -730,6 +738,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Overview */
+        get: operations["get_overview_api_v1_me_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile/facts": {
         parameters: {
             query?: never;
@@ -850,6 +875,13 @@ export interface components {
              */
             status: string;
         };
+        /** ApplicationCounts */
+        ApplicationCounts: {
+            /** Active */
+            active: number;
+            /** Total */
+            total: number;
+        };
         /** ApplicationCreateRequest */
         ApplicationCreateRequest: {
             /**
@@ -934,6 +966,13 @@ export interface components {
             /** Requirement Text */
             requirement_text: string;
         };
+        /** DocumentCounts */
+        DocumentCounts: {
+            /** Exported */
+            exported: number;
+            /** Total */
+            total: number;
+        };
         /**
          * DocumentType
          * @enum {string}
@@ -951,6 +990,17 @@ export interface components {
             filename: string;
             /** Url */
             url: string;
+        };
+        /** EvidenceCounts */
+        EvidenceCounts: {
+            /** Candidate */
+            candidate: number;
+            /** Confirmed */
+            confirmed: number;
+            /** Stale */
+            stale: number;
+            /** Total */
+            total: number;
         };
         /** EvidenceDetail */
         EvidenceDetail: {
@@ -1237,6 +1287,17 @@ export interface components {
          * @enum {string}
          */
         GenerationRunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+        /** GitHubStatus */
+        GitHubStatus: {
+            /** Connected */
+            connected: boolean;
+            /** Connected At */
+            connected_at?: string | null;
+            /** Last Sync At */
+            last_sync_at?: string | null;
+            /** Login */
+            login?: string | null;
+        };
         /** GraphEdge */
         GraphEdge: {
             /**
@@ -1322,6 +1383,13 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** JobCounts */
+        JobCounts: {
+            /** Ready */
+            ready: number;
+            /** Total */
+            total: number;
+        };
         /** JobCreateRequest */
         JobCreateRequest: {
             /** Source Text */
@@ -1374,6 +1442,15 @@ export interface components {
          * @enum {string}
          */
         MatchLabel: "strong" | "partial" | "gap" | "unknown";
+        /** OverviewResponse */
+        OverviewResponse: {
+            applications: components["schemas"]["ApplicationCounts"];
+            documents: components["schemas"]["DocumentCounts"];
+            evidence: components["schemas"]["EvidenceCounts"];
+            github: components["schemas"]["GitHubStatus"];
+            jobs: components["schemas"]["JobCounts"];
+            repositories: components["schemas"]["RepositoryCounts"];
+        };
         /** PositioningResponse */
         PositioningResponse: {
             /** Gaps To Avoid */
@@ -1424,6 +1501,15 @@ export interface components {
         RefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /** RepositoryCounts */
+        RepositoryCounts: {
+            /** Selected */
+            selected: number;
+            /** Synced */
+            synced: number;
+            /** Total */
+            total: number;
         };
         /** RepositoryPatch */
         RepositoryPatch: {
@@ -1565,6 +1651,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Demo
+             * @default false
+             */
+            is_demo: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -2289,9 +2380,10 @@ export interface operations {
     };
     callback_api_v1_github_callback_get: {
         parameters: {
-            query: {
-                code: string;
-                state: string;
+            query?: {
+                state?: string;
+                code?: string | null;
+                error?: string | null;
             };
             header?: never;
             path?: never;
@@ -2813,6 +2905,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_overview_api_v1_me_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewResponse"];
                 };
             };
         };

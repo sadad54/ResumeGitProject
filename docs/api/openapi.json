@@ -20,6 +20,24 @@
         "title": "AnalyzeResponse",
         "type": "object"
       },
+      "ApplicationCounts": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "active"
+        ],
+        "title": "ApplicationCounts",
+        "type": "object"
+      },
       "ApplicationCreateRequest": {
         "properties": {
           "job_id": {
@@ -230,6 +248,24 @@
         "title": "CoverageRow",
         "type": "object"
       },
+      "DocumentCounts": {
+        "properties": {
+          "exported": {
+            "title": "Exported",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "exported"
+        ],
+        "title": "DocumentCounts",
+        "type": "object"
+      },
       "DocumentType": {
         "enum": [
           "resume",
@@ -260,6 +296,34 @@
           "expires_at"
         ],
         "title": "DownloadLink",
+        "type": "object"
+      },
+      "EvidenceCounts": {
+        "properties": {
+          "candidate": {
+            "title": "Candidate",
+            "type": "integer"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "integer"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "confirmed",
+          "candidate",
+          "stale"
+        ],
+        "title": "EvidenceCounts",
         "type": "object"
       },
       "EvidenceDetail": {
@@ -913,6 +977,54 @@
         "title": "GenerationRunStatus",
         "type": "string"
       },
+      "GitHubStatus": {
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "connected_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected At"
+          },
+          "last_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync At"
+          },
+          "login": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login"
+          }
+        },
+        "required": [
+          "connected"
+        ],
+        "title": "GitHubStatus",
+        "type": "object"
+      },
       "GraphEdge": {
         "properties": {
           "explanation": {
@@ -1179,6 +1291,24 @@
         "title": "JobCaptureRequest",
         "type": "object"
       },
+      "JobCounts": {
+        "properties": {
+          "ready": {
+            "title": "Ready",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "ready"
+        ],
+        "title": "JobCounts",
+        "type": "object"
+      },
       "JobCreateRequest": {
         "properties": {
           "source_text": {
@@ -1338,6 +1468,38 @@
         "title": "MatchLabel",
         "type": "string"
       },
+      "OverviewResponse": {
+        "properties": {
+          "applications": {
+            "$ref": "#/components/schemas/ApplicationCounts"
+          },
+          "documents": {
+            "$ref": "#/components/schemas/DocumentCounts"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidenceCounts"
+          },
+          "github": {
+            "$ref": "#/components/schemas/GitHubStatus"
+          },
+          "jobs": {
+            "$ref": "#/components/schemas/JobCounts"
+          },
+          "repositories": {
+            "$ref": "#/components/schemas/RepositoryCounts"
+          }
+        },
+        "required": [
+          "github",
+          "repositories",
+          "evidence",
+          "jobs",
+          "documents",
+          "applications"
+        ],
+        "title": "OverviewResponse",
+        "type": "object"
+      },
       "PositioningResponse": {
         "properties": {
           "gaps_to_avoid": {
@@ -1474,6 +1636,29 @@
           "refresh_token"
         ],
         "title": "RefreshRequest",
+        "type": "object"
+      },
+      "RepositoryCounts": {
+        "properties": {
+          "selected": {
+            "title": "Selected",
+            "type": "integer"
+          },
+          "synced": {
+            "title": "Synced",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "selected",
+          "synced"
+        ],
+        "title": "RepositoryCounts",
         "type": "object"
       },
       "RepositoryPatch": {
@@ -1806,6 +1991,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "is_demo": {
+            "default": false,
+            "title": "Is Demo",
+            "type": "boolean"
           }
         },
         "required": [
@@ -3064,24 +3254,49 @@
     },
     "/api/v1/github/callback": {
       "get": {
+        "description": "GitHub sends the browser here after the consent screen, so every\noutcome must send it back to the web app. This used to require `code`\nand raise on failure, so clicking Cancel on GitHub (which returns\n`error=access_denied` and no code) left the user on the API's domain\nlooking at a JSON 422. Reasons are short fixed codes, never GitHub's\nfree-text error, since they end up in a URL the web app renders.",
         "operationId": "callback_api_v1_github_callback_get",
         "parameters": [
           {
             "in": "query",
-            "name": "code",
-            "required": true,
+            "name": "state",
+            "required": false,
             "schema": {
-              "title": "Code",
+              "default": "",
+              "title": "State",
               "type": "string"
             }
           },
           {
             "in": "query",
-            "name": "state",
-            "required": true,
+            "name": "code",
+            "required": false,
             "schema": {
-              "title": "State",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
             }
           }
         ],
@@ -3884,6 +4099,32 @@
         "summary": "Get Requirements",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/api/v1/me/overview": {
+      "get": {
+        "operationId": "get_overview_api_v1_me_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Overview",
+        "tags": [
+          "overview"
         ]
       }
     },

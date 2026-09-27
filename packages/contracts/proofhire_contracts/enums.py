@@ -129,6 +129,10 @@ class RunEventName(StrEnum):
     GITHUB_SYNC_STARTED = "github.sync.started"
     GITHUB_REPO_ANALYZING = "github.repo.analyzing"
     GITHUB_REPO_COMPLETED = "github.repo.completed"
+    # Run-level terminal events: a sync covers several repositories, and
+    # without these a failed run left the progress stream open forever.
+    GITHUB_SYNC_COMPLETED = "github.sync.completed"
+    GITHUB_SYNC_FAILED = "github.sync.failed"
     EVIDENCE_CREATED = "evidence.created"
     JOB_CAPTURED = "job.captured"
     JOB_ANALYSIS_STARTED = "job.analysis.started"

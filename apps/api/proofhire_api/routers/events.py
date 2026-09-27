@@ -22,6 +22,10 @@ from proofhire_api.models.user import User
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
+_TERMINAL_EVENTS = frozenset(
+    {"generation.completed", "generation.failed", "github.sync.completed", "github.sync.failed"}
+)
+
 
 async def _event_stream(run_id: str):
     settings = get_settings()
@@ -36,12 +40,10 @@ async def _event_stream(run_id: str):
                 continue
             payload = json.loads(message["data"])
             yield {"event": payload["event"], "data": json.dumps(payload["data"])}
-            # Terminal events that end the stream server-side. GitHub sync has no
-            # single terminal event (a run may cover several repos, each emitting
-            # its own github.repo.completed) — the client tracks completion against
-            # the repository_ids it received from POST /github/sync and closes the
-            # EventSource itself, or falls back to GET /github/sync/{run_id}.
-            if payload["event"] in {"generation.completed", "generation.failed"}:
+            # Terminal events end the stream server-side. A GitHub sync covers
+            # several repositories (one github.repo.completed each) and ends
+            # with exactly one github.sync.completed / .failed.
+            if payload["event"] in _TERMINAL_EVENTS:
                 break
     finally:
         await pubsub.unsubscribe(f"run:{run_id}")

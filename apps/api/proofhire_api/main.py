@@ -21,6 +21,7 @@ from proofhire_api.routers import (
     github,
     health,
     jobs,
+    overview,
     profile,
 )
 from proofhire_api.telemetry import configure_tracing
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(overview.router)
     app.include_router(demo.router)
     app.include_router(github.router)
     app.include_router(events.router)
