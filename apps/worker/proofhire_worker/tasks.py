@@ -5,7 +5,7 @@ This module imports every task subpackage so Dramatiq discovers all actors.
 """
 
 import dramatiq
-from proofhire_api.config import get_settings
+from proofhire_api.config import get_settings, validate_deployment_config
 from proofhire_api.error_monitoring import configure_error_monitoring
 from proofhire_api.telemetry import configure_tracing
 
@@ -17,6 +17,9 @@ from proofhire_api.telemetry import configure_tracing
 import proofhire_worker.broker  # noqa: F401
 from proofhire_worker import ingestion, intelligence, render  # noqa: F401
 
+# The worker decrypts stored GitHub tokens with TOKEN_ENCRYPTION_KEY, so it
+# refuses a placeholder key in production exactly as the API does.
+validate_deployment_config()
 configure_tracing("proofhire-worker", get_settings().otel_exporter_otlp_endpoint)
 configure_error_monitoring(
     get_settings().sentry_dsn, environment=get_settings().environment, service="proofhire-worker"

@@ -3,9 +3,24 @@
 See .env.example at the repo root for the full list of expected variables.
 """
 
+import logging
 from functools import lru_cache
+from urllib.parse import urlparse
 
+from cryptography.fernet import Fernet
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+# The committed defaults below exist so local dev and tests start with zero
+# setup. In a deployed environment every one of them is a vulnerability: a
+# JWT signed with a secret that is in the public repository can be forged by
+# anyone who reads it.
+_PLACEHOLDER_SECRETS = frozenset(
+    {"changeme-generate-a-real-secret", "changeme-generate-a-real-fernet-key", ""}
+)
+DEPLOYED_ENVIRONMENTS = frozenset({"production", "staging"})
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1"})
 
 
 class Settings(BaseSettings):
@@ -46,3 +61,77 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def _is_public_https(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.scheme == "https" and (parsed.hostname or "") not in _LOCAL_HOSTS
+
+
+def deployment_config_errors(settings: Settings) -> list[str]:
+    """Every reason these settings are unsafe to serve real users with.
+
+    Empty outside DEPLOYED_ENVIRONMENTS: local dev keeps its zero-setup
+    defaults. Pure, so tests can check each rule without booting the app.
+    """
+    if settings.environment not in DEPLOYED_ENVIRONMENTS:
+        return []
+    errors: list[str] = []
+    if settings.auth_secret_key in _PLACEHOLDER_SECRETS or len(settings.auth_secret_key) < 32:
+        errors.append(
+            "AUTH_SECRET_KEY is unset, the committed placeholder, or shorter than 32 "
+            "characters (tokens signed with it are forgeable)"
+        )
+    if settings.token_encryption_key in _PLACEHOLDER_SECRETS:
+        errors.append("TOKEN_ENCRYPTION_KEY is unset or the committed placeholder")
+    else:
+        try:
+            Fernet(settings.token_encryption_key.encode("utf-8"))
+        except ValueError:
+            errors.append("TOKEN_ENCRYPTION_KEY is not a valid Fernet key")
+    for name in ("web_base_url", "api_base_url"):
+        value = getattr(settings, name)
+        if not _is_public_https(value):
+            errors.append(f"{name.upper()} must be a public https:// origin, got {value!r}")
+    if settings.github_oauth_client_id and not settings.github_oauth_redirect_uri.startswith(
+        settings.api_base_url.rstrip("/") + "/"
+    ):
+        errors.append(
+            "GITHUB_OAUTH_REDIRECT_URI must be this API's own /api/v1/github/callback "
+            f"(API_BASE_URL is {settings.api_base_url!r})"
+        )
+    return errors
+
+
+def deployment_config_warnings(settings: Settings) -> list[str]:
+    """Degraded-but-safe configuration: worth a loud log line, not a refusal
+    to start (the container smoke test deliberately runs a deployed
+    environment on the mock provider)."""
+    if settings.environment not in DEPLOYED_ENVIRONMENTS:
+        return []
+    provider = settings.llm_default_provider
+    keys = {
+        "groq": settings.groq_api_key,
+        "openai": settings.openai_api_key,
+        "anthropic": settings.anthropic_api_key,
+    }
+    if provider == "mock":
+        return ["LLM_DEFAULT_PROVIDER=mock: analysis and generation return empty placeholders"]
+    if provider in keys and not keys[provider]:
+        return [
+            f"LLM_DEFAULT_PROVIDER={provider} but its API key is not set: every LLM task will fail"
+        ]
+    return []
+
+
+def validate_deployment_config(settings: Settings | None = None) -> None:
+    """Called at API and worker startup. Raises with every problem at once,
+    so one failed deploy shows the whole list instead of one per attempt."""
+    settings = settings or get_settings()
+    for warning in deployment_config_warnings(settings):
+        logger.warning("deployment_config_degraded", extra={"reason": warning})
+    errors = deployment_config_errors(settings)
+    if errors:
+        raise RuntimeError(
+            f"Refusing to start with ENVIRONMENT={settings.environment}: " + "; ".join(errors)
+        )

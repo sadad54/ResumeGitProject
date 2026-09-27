@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from proofhire_api.config import get_settings
+from proofhire_api.config import get_settings, validate_deployment_config
 from proofhire_api.error_monitoring import configure_error_monitoring
 from proofhire_api.logging import configure_logging
 from proofhire_api.middleware.security_headers import SecurityHeadersMiddleware
@@ -28,6 +28,7 @@ from proofhire_api.telemetry import configure_tracing
 def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
+    validate_deployment_config(settings)
     configure_tracing("proofhire-api", settings.otel_exporter_otlp_endpoint)
     configure_error_monitoring(
         settings.sentry_dsn, environment=settings.environment, service="proofhire-api"
