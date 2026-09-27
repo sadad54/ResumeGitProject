@@ -7,7 +7,8 @@ model. So every provider here carries a `model_id`, and every stored vector
 records it (`evidence.embedding_model`); retrieval never compares across ids.
 
 - ``local`` (default): BAAI/bge-small-en-v1.5 through ONNX Runtime on CPU,
-  via fastembed. No API key, no per-call cost, ~10 ms per text, 384-d. This
+  via fastembed. No API key, no per-call cost, 384-d; ~9 ms per text in a warm
+  batch (docs/product/metrics/embedding-model.json). This
   replaced a silent fallback where, without an OpenAI key, "embeddings" were
   SHA-256 bytes — vectors with no semantic content at all.
 - ``openai``: text-embedding-3-small asked for EMBEDDING_DIMENSION dims

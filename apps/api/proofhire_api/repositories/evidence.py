@@ -32,7 +32,7 @@ CANDIDATES_PER_SIGNAL = 50
 # the most rows one index scan returns, so the branch was silently truncated
 # to 40 of its 50 candidates. Measured on 20k real bge-small embeddings
 # (docs/product/metrics/query-benchmark.md): recall@50 vs exact 0.800 at the
-# defaults, 0.982 at 100 with iterative scan, for ~1.4 ms more per query.
+# defaults, 0.967 at 100 with iterative scan, for ~1.6 ms more per query.
 # Iterative scan keeps scanning until enough rows pass the per-user filter,
 # so one user's evidence isn't starved by other users' nearer vectors.
 HNSW_EF_SEARCH = 100

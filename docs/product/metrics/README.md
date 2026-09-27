@@ -1,4 +1,49 @@
-# Retrieval query: bottleneck found, fixed, re-measured
+# Retrieval index: 384-d embeddings, HNSW, and how far ANN drifts from exact
+
+Current state (2026-09-27, ADR-0018). `query-benchmark.json` / `.md` come from
+`apps/api/scripts/benchmark_queries.py --embeddings real`: 20,000 synthetic
+evidence rows embedded with the production model (bge-small-en-v1.5, 384-d),
+HNSW index, `hnsw.ef_search = 100` + iterative scan as `hybrid_search` sets
+them. `query-benchmark-random-vectors.*` is the same run with random unit
+vectors, the unstructured worst case for any approximate index.
+
+| Query (real embeddings) | With indexes p50 | Without p50 | Speedup | Hybrid top-10 vs exact |
+|---|---|---|---|---|
+| lexical+skills | 5.08 ms | 14.61 ms | 2.9× | n/a (no matches) |
+| lexical only | 14.25 ms | 17.16 ms | 1.2× | 1.0 |
+| vector+lexical | 11.5 ms | 89.64 ms | 7.8× | **1.0** |
+
+Vector branch alone, HNSW vs exact scan (20 queries, top-50):
+
+| hnsw.ef_search | iterative scan | Recall@50 | Rows returned (of 50) | p50 |
+|---|---|---|---|---|
+| 40 (pgvector default) | off | 0.800 | **40** | 3.19 ms |
+| 100 (production) | relaxed_order | **0.967** | 50 | 4.78 ms |
+| 200 | relaxed_order | 0.994 | 50 | 6.51 ms |
+
+**What this found.** pgvector's `hnsw.ef_search` (default 40) is also the most
+rows one index scan returns. `hybrid_search` asks each signal for 50
+candidates, so the vector branch had been silently truncated to 40, and every
+missing row was a recall loss (0.800). At 100 with iterative scan it returns
+all 50 at 0.967 recall for ~1.6 ms more; iterative scan also keeps one user's
+rows from being starved by other users' nearer vectors under the per-user
+filter. On random vectors recall is 0.2–0.56 at any setting: no neighbourhood
+structure to exploit, which is why the random run is a stress test rather
+than the headline.
+
+**Not comparable with the IVFFlat numbers below.** Those used 1536-d random
+vectors and IVFFlat probing 1 of 100 lists; its 5.01 ms vector+lexical p50 was
+fast partly because it looked at 1% of the data, and nobody measured its
+recall. The exact scan here is also cheaper (384-d), so the speedup ratio is
+smaller while recall is known.
+
+The exploratory probe that led to this (scratch, not committed) measured 0.982
+at the production setting on a different 20-query sample; the committed file
+above is the number to quote.
+
+---
+
+# Retrieval query: bottleneck found, fixed, re-measured (IVFFlat, 1536-d)
 
 Checklist 13.10 (EXPLAIN ANALYZE), 13.11 (benchmark before/after indexing),
 and the "identify bottleneck -> optimize -> rerun -> document improvement" loop.
@@ -9,7 +54,7 @@ and index effect at scale, not retrieval quality, which needs the labelled
 benchmark that is out of scope.
 
 Raw data: `query-benchmark-before-rewrite.json` (original query) and
-`query-benchmark.json` (after), each with full `EXPLAIN (ANALYZE, BUFFERS)` plans.
+`query-benchmark-ivfflat-1536d.json` (after), each with full `EXPLAIN (ANALYZE, BUFFERS)` plans.
 
 ## What the first run found
 
@@ -97,7 +142,7 @@ API latency: 200 sequential requests per route from one warm client to the local
 | `/api/v1/evidence` | 11.13 ms | 46.2 ms | 120.64 ms |
 | `/api/v1/evidence/graph` | 10.91 ms | 23.64 ms | 33.74 ms |
 
-Retrieval query at 20k evidence rows: see the top of this file (p50 5 ms vector+lexical after the rewrite).
+Retrieval query at 20k evidence rows: see the top of this file (vector+lexical p50 11.5 ms with real 384-d embeddings and HNSW; hybrid top-10 identical to the exact scan).
 
 Repositories / source files processed (dev database, real GitHub sync of one repository): 1 repository, 120 source artifacts. Evidence nodes generated: **0** — extraction never completed on this database before the worker bug fixed earlier in this session, and has not been re-run against a paid provider since. Incremental-sync reduction: instrumented (`extraction_skipped_no_changes`, see `infra/observability`) but no re-sync has run to produce a number.
 
