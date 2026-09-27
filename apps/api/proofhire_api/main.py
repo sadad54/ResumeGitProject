@@ -16,6 +16,7 @@ from proofhire_api.routers import (
     demo,
     events,
     evidence,
+    files,
     generation,
     github,
     health,
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs.router)
     app.include_router(profile.router)
     app.include_router(generation.router)
+    app.include_router(files.router)
     app.include_router(applications.router)
 
     return app

@@ -27,6 +27,7 @@ from proofhire_api.security.token_revocation import (
     is_revoked,
     revoke,
 )
+from proofhire_api.services.object_storage import get_object_storage, user_prefix
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -131,7 +132,19 @@ async def delete_account(
     Hard delete, by design (see docs/adr/0016-deletion-policy.md): this is the
     user's own data-erasure path, so leaving soft-deleted rows behind would
     defeat the point. Every owned table cascades from `users`, including the
-    encrypted GitHub token.
+    encrypted GitHub token; rendered exports live outside the database and
+    are removed first, by owner prefix.
+
+    Files before rows: if storage is unreachable the request fails and
+    nothing is deleted, so the user can retry. The other order could strand
+    their exported resumes with no account left to find them through.
     """
+    try:
+        await get_object_storage().delete_prefix(user_prefix(current_user.id))
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Could not delete your exported files, so nothing was deleted. Try again shortly.",
+        ) from exc
     await db.delete(current_user)
     await db.commit()

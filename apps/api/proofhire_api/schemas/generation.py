@@ -50,10 +50,13 @@ class GeneratedDocumentPublic(BaseModel):
     template_id: str
     version: int
     content_json: dict
-    html_ref: str | None = None
-    pdf_ref: str | None = None
-    plaintext_ref: str | None = None
+    # Availability, not storage keys: where an export lives is the server's
+    # business (see services/object_storage.py). Download via /download.
+    pdf_available: bool = False
+    plaintext_available: bool = False
     page_count: int | None = None
+    created_at: datetime
+    exported_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -63,6 +66,15 @@ class ExportResponse(BaseModel):
     pdf_available: bool
     page_count: int | None = None
     overflowed: bool = False
+
+
+class DownloadLink(BaseModel):
+    """A short-lived signed URL the browser navigates to directly. Carries no
+    bearer token, so it can be a plain link; it stops working at expires_at."""
+
+    url: str
+    filename: str
+    expires_at: int
 
 
 class GeneratedClaimPublic(BaseModel):

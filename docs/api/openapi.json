@@ -238,6 +238,30 @@
         "title": "DocumentType",
         "type": "string"
       },
+      "DownloadLink": {
+        "description": "A short-lived signed URL the browser navigates to directly. Carries no\nbearer token, so it can be a plain link; it stops working at expires_at.",
+        "properties": {
+          "expires_at": {
+            "title": "Expires At",
+            "type": "integer"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "filename",
+          "expires_at"
+        ],
+        "title": "DownloadLink",
+        "type": "object"
+      },
       "EvidenceDetail": {
         "properties": {
           "confidence": {
@@ -741,21 +765,27 @@
             "title": "Content Json",
             "type": "object"
           },
-          "generation_run_id": {
-            "format": "uuid",
-            "title": "Generation Run Id",
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
             "type": "string"
           },
-          "html_ref": {
+          "exported_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Html Ref"
+            "title": "Exported At"
+          },
+          "generation_run_id": {
+            "format": "uuid",
+            "title": "Generation Run Id",
+            "type": "string"
           },
           "id": {
             "format": "uuid",
@@ -778,27 +808,15 @@
             ],
             "title": "Page Count"
           },
-          "pdf_ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pdf Ref"
+          "pdf_available": {
+            "default": false,
+            "title": "Pdf Available",
+            "type": "boolean"
           },
-          "plaintext_ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Plaintext Ref"
+          "plaintext_available": {
+            "default": false,
+            "title": "Plaintext Available",
+            "type": "boolean"
           },
           "template_id": {
             "title": "Template Id",
@@ -819,7 +837,8 @@
           "type",
           "template_id",
           "version",
-          "content_json"
+          "content_json",
+          "created_at"
         ],
         "title": "GeneratedDocumentPublic",
         "type": "object"
@@ -2103,7 +2122,7 @@
     },
     "/api/v1/auth/me": {
       "delete": {
-        "description": "Permanently delete the account and everything owned by it.\n\nHard delete, by design (see docs/adr/0016-deletion-policy.md): this is the\nuser's own data-erasure path, so leaving soft-deleted rows behind would\ndefeat the point. Every owned table cascades from `users`, including the\nencrypted GitHub token.",
+        "description": "Permanently delete the account and everything owned by it.\n\nHard delete, by design (see docs/adr/0016-deletion-policy.md): this is the\nuser's own data-erasure path, so leaving soft-deleted rows behind would\ndefeat the point. Every owned table cascades from `users`, including the\nencrypted GitHub token; rendered exports live outside the database and\nare removed first, by owner prefix.\n\nFiles before rows: if storage is unreachable the request fails and\nnothing is deleted, so the user can retry. The other order could strand\ntheir exported resumes with no account left to find them through.",
         "operationId": "delete_account_api_v1_auth_me_delete",
         "responses": {
           "204": {
@@ -2328,7 +2347,7 @@
     },
     "/api/v1/documents/{document_id}/claims": {
       "get": {
-        "description": "Backs the resume workspace's provenance rail (PRD \u00a711.4): click a\nbullet, see exactly which repository/file it traces back to.",
+        "description": "Backs the resume workspace's provenance rail (PRD \u00a711.4): click a\nbullet, see exactly which repository/file it traces back to.\n\nOne query. It used to issue four per claim (link, evidence, repository,\nsource), and took whichever link row came back first; this picks each\nclaim's strongest supporting evidence and that evidence's most relevant\nsource, deterministically.",
         "operationId": "get_document_claims_api_v1_documents__document_id__claims_get",
         "parameters": [
           {
@@ -2374,6 +2393,69 @@
           }
         ],
         "summary": "Get Document Claims",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/download": {
+      "get": {
+        "description": "Authorize here, then let the browser fetch the bytes straight from\nstorage through a short-lived signed URL (checklist \u00a717 \"signed\nobject-storage URLs\"). The bytes never pass through this process, and the\nlink carries no bearer token.\n\n410 when the export's files are gone \u2014 e.g. the single-container deploy\nrestarted and its local disk was wiped. The stale refs are cleared so the\ndocument reads as not-yet-exported and the UI offers Export again, rather\nthan every future download failing the same way.",
+        "operationId": "get_download_link_api_v1_documents__document_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "pdf",
+              "enum": [
+                "pdf",
+                "txt"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadLink"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Download Link",
         "tags": [
           "generation"
         ]
@@ -2458,52 +2540,6 @@
           }
         ],
         "summary": "Export Document Endpoint",
-        "tags": [
-          "generation"
-        ]
-      }
-    },
-    "/api/v1/documents/{document_id}/pdf": {
-      "get": {
-        "operationId": "download_document_pdf_api_v1_documents__document_id__pdf_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "document_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Document Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Download Document Pdf",
         "tags": [
           "generation"
         ]

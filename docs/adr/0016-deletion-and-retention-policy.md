@@ -57,8 +57,11 @@ is the user's own data-erasure path — a "deleted" account whose rows still sat
 in the database would defeat the purpose and would be the wrong answer to a
 data-subject erasure request.
 
-Exported PDFs in the local store are not yet removed by this path; see
-Consequences.
+Rendered exports live in object storage under `users/<user_id>/`
+(`services/object_storage.py`), outside the database, so the endpoint deletes
+that prefix first and only then the row. If storage is unreachable the request
+fails with nothing deleted; the reverse order could strand files with no
+account left to reach them through.
 
 **5. Token revocation is time-bounded, not permanent.**
 
@@ -74,11 +77,11 @@ anyway, the signature check rejects it regardless.
   one forgotten `WHERE deleted_at IS NULL` exposes deleted data.
 - Account deletion is irreversible and unrecoverable by support. That is the
   intended guarantee, and it is stated in the endpoint's docstring.
-- **Known gap:** account deletion removes database rows but does not yet purge
-  rendered PDFs/plaintext from the local export store, because that store is
-  still the phase-6 local filesystem rather than the planned object storage. The
-  object-storage work must delete by user prefix as part of this path. Tracked
-  in `docs/product/BUILD_STATUS.md`; not silently treated as finished.
+- ~~Known gap: account deletion did not purge rendered exports.~~ Closed
+  2026-09-27: exports moved to owner-prefixed object-storage keys and deletion
+  removes the prefix before the row (`test_account_deletion_purges_exported_files`).
+  Exports written before that change used absolute local paths outside any
+  prefix; they only ever existed in local development databases.
 - Rejected evidence retains the original extracted text. If a user rejects
   evidence *because* it contains something they consider sensitive, they
   currently have to delete the account to purge it. A future

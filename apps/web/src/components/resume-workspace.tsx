@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { openRunEvents } from "@/lib/events";
-import { apiBaseUrl, apiFetch, ApiError, getAccessToken } from "@/lib/api";
+import { apiFetch, ApiError, getAccessToken } from "@/lib/api";
 import { Skeleton } from "@proofhire/design-system/ui";
 import { DocumentDiff } from "./document-diff";
 import { DocumentPreview } from "./document-preview";
@@ -29,7 +29,7 @@ type GeneratedDocument = {
   version: number;
   type: "resume" | "cover_letter";
   content_json: ResumeContent | CoverLetterContent;
-  pdf_ref: string | null;
+  pdf_available: boolean;
   template_id: string;
   page_count: number | null;
 };
@@ -216,24 +216,22 @@ export function ResumeWorkspace() {
 
   async function downloadPdf() {
     if (!document) return;
-    const token = getAccessToken();
-    const response = await fetch(
-      `${apiBaseUrl()}/api/v1/documents/${document.id}/pdf`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    if (!response.ok) {
-      setError("Failed to download PDF.");
-      return;
+    setError(null);
+    try {
+      // The API checks ownership and returns a short-lived signed URL; the
+      // browser then downloads straight from storage (attachment response).
+      const link = await apiFetch<{ url: string }>(
+        `/api/v1/documents/${document.id}/download?format=pdf`,
+      );
+      window.location.assign(link.url);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 410) {
+        setDocument({ ...document, pdf_available: false });
+        setError("This export has expired. Export it again to download.");
+      } else {
+        setError("Failed to download PDF.");
+      }
     }
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = window.document.createElement("a");
-    a.href = url;
-    a.download = `resume-${document.id}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   const activeClaim = claims.find((c) => c.claim_text === selectedBullet);
@@ -321,7 +319,7 @@ export function ResumeWorkspace() {
             >
               {exporting ? "Exporting..." : "Export PDF"}
             </button>
-            {document.pdf_ref && (
+            {document.pdf_available && (
               <button
                 onClick={downloadPdf}
                 className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white"

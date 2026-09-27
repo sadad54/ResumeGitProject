@@ -2,11 +2,12 @@ import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import HTMLResponse
 from proofhire_contracts import DocumentType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proofhire_api.config import get_settings
 from proofhire_api.db import get_db
 from proofhire_api.dependencies import get_current_user
 from proofhire_api.models.evidence import Evidence, EvidenceSource
@@ -17,6 +18,7 @@ from proofhire_api.models.job import Job
 from proofhire_api.models.repository import Repository
 from proofhire_api.models.user import User
 from proofhire_api.schemas.generation import (
+    DownloadLink,
     ExportResponse,
     GeneratedClaimPublic,
     GeneratedDocumentPublic,
@@ -26,8 +28,21 @@ from proofhire_api.schemas.generation import (
     PositioningResponse,
 )
 from proofhire_api.security.rate_limit import export_rate_limit, generate_rate_limit
+from proofhire_api.services.object_storage import get_object_storage
 
 router = APIRouter(prefix="/api/v1", tags=["generation"])
+
+
+async def _owned_document(
+    document_id: uuid.UUID, current_user: User, db: AsyncSession
+) -> GeneratedDocument:
+    """404 (not 403) for someone else's document, so ids can't be probed."""
+    document = await db.get(GeneratedDocument, document_id)
+    if document is not None:
+        job = await db.get(Job, document.job_id)
+        if job is not None and job.user_id == current_user.id:
+            return document
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
 
 
 @router.post("/jobs/{job_id}/positioning", response_model=PositioningResponse)
@@ -98,7 +113,9 @@ async def list_documents(
             .where(
                 Job.user_id == current_user.id,
             )
-            .order_by(GeneratedDocument.id.desc())
+            # Newest first. This used to order by the UUID primary key, which
+            # is random, so the saved-documents list came back shuffled.
+            .order_by(GeneratedDocument.created_at.desc(), GeneratedDocument.id)
             .limit(100)
         )
     )
@@ -110,13 +127,7 @@ async def get_document(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> GeneratedDocument:
-    document = await db.get(GeneratedDocument, document_id)
-    if document is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
-    job = await db.get(Job, document.job_id)
-    if job is None or job.user_id != current_user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
-    return document
+    return await _owned_document(document_id, current_user, db)
 
 
 @router.post(
@@ -133,12 +144,7 @@ async def export_document_endpoint(
 ) -> ExportResponse:
     """Synchronous (not queued): one bounded Playwright render + parse-back
     validation cycle, same rationale as resume upload and positioning."""
-    document = await db.get(GeneratedDocument, document_id)
-    if document is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
-    job = await db.get(Job, document.job_id)
-    if job is None or job.user_id != current_user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    document = await _owned_document(document_id, current_user, db)
 
     from proofhire_worker.render.export import ParseBackValidationError, export_document
 
@@ -162,22 +168,43 @@ async def export_document_endpoint(
     )
 
 
-@router.get("/documents/{document_id}/pdf")
-async def download_document_pdf(
+@router.get("/documents/{document_id}/download", response_model=DownloadLink)
+async def get_download_link(
     document_id: uuid.UUID,
+    format: Literal["pdf", "txt"] = "pdf",
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> FileResponse:
-    document = await db.get(GeneratedDocument, document_id)
-    if document is None or not document.pdf_ref:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "PDF not found — export the document first")
-    job = await db.get(Job, document.job_id)
-    if job is None or job.user_id != current_user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+) -> DownloadLink:
+    """Authorize here, then let the browser fetch the bytes straight from
+    storage through a short-lived signed URL (checklist §17 "signed
+    object-storage URLs"). The bytes never pass through this process, and the
+    link carries no bearer token.
 
-    return FileResponse(
-        document.pdf_ref, media_type="application/pdf", filename=f"resume-{document.id}.pdf"
+    410 when the export's files are gone — e.g. the single-container deploy
+    restarted and its local disk was wiped. The stale refs are cleared so the
+    document reads as not-yet-exported and the UI offers Export again, rather
+    than every future download failing the same way.
+    """
+    document = await _owned_document(document_id, current_user, db)
+    key = document.pdf_ref if format == "pdf" else document.plaintext_ref
+    if key is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Not exported yet — export the document first"
+        )
+
+    storage = get_object_storage()
+    if not await storage.exists(key):
+        document.pdf_ref = document.html_ref = document.plaintext_ref = None
+        document.exported_at = None
+        await db.commit()
+        raise HTTPException(status.HTTP_410_GONE, "This export has expired — export it again")
+
+    kind = "resume" if document.type == DocumentType.RESUME else "cover-letter"
+    filename = f"{kind}-v{document.version}-{str(document.id)[:8]}.{format}"
+    link = storage.signed_url(
+        key, filename=filename, ttl_seconds=get_settings().download_url_ttl_seconds
     )
+    return DownloadLink(url=link.url, filename=filename, expires_at=link.expires_at)
 
 
 @router.get("/documents/{document_id}/preview", response_class=HTMLResponse)
@@ -194,12 +221,7 @@ async def preview_document_html(
     will contain — not a separate React approximation that can drift from the
     real output. Nothing is persisted; this is read-only.
     """
-    document = await db.get(GeneratedDocument, document_id)
-    if document is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
-    job = await db.get(Job, document.job_id)
-    if job is None or job.user_id != current_user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    document = await _owned_document(document_id, current_user, db)
 
     from proofhire_worker.render.templates import render_cover_letter_html, render_resume_html
 
@@ -227,47 +249,47 @@ async def get_document_claims(
     db: AsyncSession = Depends(get_db),
 ) -> list[GeneratedClaimPublic]:
     """Backs the resume workspace's provenance rail (PRD §11.4): click a
-    bullet, see exactly which repository/file it traces back to."""
-    document = await db.get(GeneratedDocument, document_id)
-    if document is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
-    job = await db.get(Job, document.job_id)
-    if job is None or job.user_id != current_user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    bullet, see exactly which repository/file it traces back to.
 
-    claims = list(
-        await db.scalars(select(GeneratedClaim).where(GeneratedClaim.document_id == document_id))
+    One query. It used to issue four per claim (link, evidence, repository,
+    source), and took whichever link row came back first; this picks each
+    claim's strongest supporting evidence and that evidence's most relevant
+    source, deterministically.
+    """
+    await _owned_document(document_id, current_user, db)
+
+    rows = await db.execute(
+        select(
+            GeneratedClaim,
+            Evidence.id,
+            Evidence.title,
+            Repository.owner,
+            Repository.name,
+            EvidenceSource.locator,
+        )
+        .outerjoin(ClaimEvidence, ClaimEvidence.claim_id == GeneratedClaim.id)
+        .outerjoin(Evidence, Evidence.id == ClaimEvidence.evidence_id)
+        .outerjoin(Repository, Repository.id == Evidence.repository_id)
+        .outerjoin(EvidenceSource, EvidenceSource.evidence_id == Evidence.id)
+        .where(GeneratedClaim.document_id == document_id)
+        .distinct(GeneratedClaim.id)
+        .order_by(
+            GeneratedClaim.id,
+            ClaimEvidence.support_score.desc().nulls_last(),
+            EvidenceSource.relevance.desc().nulls_last(),
+        )
     )
-
-    results: list[GeneratedClaimPublic] = []
-    for claim in claims:
-        claim_evidence = await db.scalar(
-            select(ClaimEvidence).where(ClaimEvidence.claim_id == claim.id)
+    return [
+        GeneratedClaimPublic(
+            id=claim.id,
+            claim_text=claim.claim_text,
+            claim_type=claim.claim_type,
+            verification_status=claim.verification_status,
+            confidence=claim.confidence,
+            evidence_id=evidence_id,
+            evidence_title=evidence_title,
+            evidence_repository=f"{owner}/{name}" if owner else None,
+            source_locator=locator,
         )
-        evidence = None
-        repository = None
-        source_locator = None
-        if claim_evidence is not None:
-            evidence = await db.get(Evidence, claim_evidence.evidence_id)
-            if evidence is not None:
-                repository = await db.get(Repository, evidence.repository_id)
-                source = await db.scalar(
-                    select(EvidenceSource).where(EvidenceSource.evidence_id == evidence.id)
-                )
-                source_locator = source.locator if source else None
-
-        results.append(
-            GeneratedClaimPublic(
-                id=claim.id,
-                claim_text=claim.claim_text,
-                claim_type=claim.claim_type,
-                verification_status=claim.verification_status,
-                confidence=claim.confidence,
-                evidence_id=evidence.id if evidence else None,
-                evidence_title=evidence.title if evidence else None,
-                evidence_repository=f"{repository.owner}/{repository.name}" if repository else None,
-                source_locator=source_locator,
-            )
-        )
-
-    return results
+        for claim, evidence_id, evidence_title, owner, name, locator in rows
+    ]

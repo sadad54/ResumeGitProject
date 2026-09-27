@@ -97,7 +97,12 @@ export interface paths {
          *     Hard delete, by design (see docs/adr/0016-deletion-policy.md): this is the
          *     user's own data-erasure path, so leaving soft-deleted rows behind would
          *     defeat the point. Every owned table cascades from `users`, including the
-         *     encrypted GitHub token.
+         *     encrypted GitHub token; rendered exports live outside the database and
+         *     are removed first, by owner prefix.
+         *
+         *     Files before rows: if storage is unreachable the request fails and
+         *     nothing is deleted, so the user can retry. The other order could strand
+         *     their exported resumes with no account left to find them through.
          */
         delete: operations["delete_account_api_v1_auth_me_delete"];
         options?: never;
@@ -201,8 +206,41 @@ export interface paths {
          * Get Document Claims
          * @description Backs the resume workspace's provenance rail (PRD §11.4): click a
          *     bullet, see exactly which repository/file it traces back to.
+         *
+         *     One query. It used to issue four per claim (link, evidence, repository,
+         *     source), and took whichever link row came back first; this picks each
+         *     claim's strongest supporting evidence and that evidence's most relevant
+         *     source, deterministically.
          */
         get: operations["get_document_claims_api_v1_documents__document_id__claims_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Download Link
+         * @description Authorize here, then let the browser fetch the bytes straight from
+         *     storage through a short-lived signed URL (checklist §17 "signed
+         *     object-storage URLs"). The bytes never pass through this process, and the
+         *     link carries no bearer token.
+         *
+         *     410 when the export's files are gone — e.g. the single-container deploy
+         *     restarted and its local disk was wiped. The stale refs are cleared so the
+         *     document reads as not-yet-exported and the UI offers Export again, rather
+         *     than every future download failing the same way.
+         */
+        get: operations["get_download_link_api_v1_documents__document_id__download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -226,23 +264,6 @@ export interface paths {
          *     validation cycle, same rationale as resume upload and positioning.
          */
         post: operations["export_document_endpoint_api_v1_documents__document_id__export_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/documents/{document_id}/pdf": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Document Pdf */
-        get: operations["download_document_pdf_api_v1_documents__document_id__pdf_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -918,6 +939,19 @@ export interface components {
          * @enum {string}
          */
         DocumentType: "resume" | "cover_letter";
+        /**
+         * DownloadLink
+         * @description A short-lived signed URL the browser navigates to directly. Carries no
+         *     bearer token, so it can be a plain link; it stops working at expires_at.
+         */
+        DownloadLink: {
+            /** Expires At */
+            expires_at: number;
+            /** Filename */
+            filename: string;
+            /** Url */
+            url: string;
+        };
         /** EvidenceDetail */
         EvidenceDetail: {
             /** Confidence */
@@ -1128,12 +1162,17 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Exported At */
+            exported_at?: string | null;
+            /**
              * Generation Run Id
              * Format: uuid
              */
             generation_run_id: string;
-            /** Html Ref */
-            html_ref?: string | null;
             /**
              * Id
              * Format: uuid
@@ -1146,10 +1185,16 @@ export interface components {
             job_id: string;
             /** Page Count */
             page_count?: number | null;
-            /** Pdf Ref */
-            pdf_ref?: string | null;
-            /** Plaintext Ref */
-            plaintext_ref?: string | null;
+            /**
+             * Pdf Available
+             * @default false
+             */
+            pdf_available: boolean;
+            /**
+             * Plaintext Available
+             * @default false
+             */
+            plaintext_available: boolean;
             /** Template Id */
             template_id: string;
             type: components["schemas"]["DocumentType"];
@@ -1913,6 +1958,39 @@ export interface operations {
             };
         };
     };
+    get_download_link_api_v1_documents__document_id__download_get: {
+        parameters: {
+            query?: {
+                format?: "pdf" | "txt";
+            };
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_document_endpoint_api_v1_documents__document_id__export_post: {
         parameters: {
             query?: {
@@ -1934,37 +2012,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExportResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_document_pdf_api_v1_documents__document_id__pdf_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

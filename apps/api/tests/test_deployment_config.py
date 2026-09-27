@@ -23,6 +23,10 @@ GOOD = {
     "api_base_url": "https://api.proofhire.example",
     "llm_default_provider": "groq",
     "groq_api_key": "not-a-real-key",
+    "storage_backend": "s3",
+    "s3_bucket_name": "exports",
+    "s3_access_key_id": "key-id",
+    "s3_secret_access_key": "key-secret",
 }
 
 
@@ -89,6 +93,19 @@ def test_oauth_callback_must_point_at_this_api():
 def test_every_problem_is_reported_at_once():
     errors = deployment_config_errors(IsolatedSettings(environment="production"))
     assert len(errors) == 4  # secret, encryption key, both origins
+
+
+def test_s3_without_credentials_is_refused():
+    [error] = deployment_config_errors(settings(s3_access_key_id=""))
+    assert "S3_ACCESS_KEY_ID" in error
+    [error] = deployment_config_errors(settings(storage_backend="gcs"))
+    assert "STORAGE_BACKEND" in error
+
+
+def test_local_storage_in_a_deployment_warns_that_exports_are_ephemeral():
+    assert deployment_config_errors(settings(storage_backend="local")) == []
+    [warning] = deployment_config_warnings(settings(storage_backend="local"))
+    assert "lost on restart" in warning
 
 
 def test_missing_llm_key_warns_but_does_not_block():

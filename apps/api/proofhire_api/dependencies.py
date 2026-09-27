@@ -18,6 +18,21 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
+# The only writes the shared demo account may make, matched on the exact
+# route template (not a path prefix). Neither changes what the next visitor
+# sees:
+# - logout revokes the caller's own session; without it a demo visitor's
+#   "Sign out" would 403 and leave their tokens live.
+# - export re-renders a document's existing content. On the free single-
+#   container deploy, a restart wipes exported files, and a read-only demo
+#   with no way to re-export would show a permanently broken download.
+_DEMO_ALLOWED_WRITES = frozenset(
+    {
+        ("POST", "/api/v1/auth/logout"),
+        ("POST", "/api/v1/documents/{document_id}/export"),
+    }
+)
+
 
 async def _resolve_user(token: str | None, db: AsyncSession) -> User:
     if token is None:
@@ -55,7 +70,11 @@ async def get_current_user(
     # — one choke point instead of a mutating-endpoint allowlist that a new
     # router could forget to apply.
     if user.is_demo:
-        if request.method not in _SAFE_METHODS:
+        route_template = getattr(request.scope.get("route"), "path", None)
+        if (
+            request.method not in _SAFE_METHODS
+            and (request.method, route_template) not in _DEMO_ALLOWED_WRITES
+        ):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 "The demo account is read-only. Sign up to make changes.",

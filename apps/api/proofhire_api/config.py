@@ -46,10 +46,17 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     llm_default_provider: str = "anthropic"
 
+    # Rendered exports (services/object_storage.py). "local" writes under
+    # LOCAL_STORAGE_ROOT (default: repo infra/storage, gitignored); "s3" uses
+    # any S3-compatible endpoint below.
+    storage_backend: str = "local"
+    local_storage_root: str = ""
     s3_endpoint_url: str = ""
     s3_access_key_id: str = ""
     s3_secret_access_key: str = ""
     s3_bucket_name: str = "proofhire-dev"
+    s3_region: str = "us-east-1"
+    download_url_ttl_seconds: int = 300
 
     sentry_dsn: str = ""
     otel_exporter_otlp_endpoint: str = ""
@@ -100,6 +107,14 @@ def deployment_config_errors(settings: Settings) -> list[str]:
             "GITHUB_OAUTH_REDIRECT_URI must be this API's own /api/v1/github/callback "
             f"(API_BASE_URL is {settings.api_base_url!r})"
         )
+    if settings.storage_backend not in {"local", "s3"}:
+        errors.append(f"STORAGE_BACKEND must be 'local' or 's3', got {settings.storage_backend!r}")
+    elif settings.storage_backend == "s3" and not (
+        settings.s3_bucket_name and settings.s3_access_key_id and settings.s3_secret_access_key
+    ):
+        errors.append(
+            "STORAGE_BACKEND=s3 needs S3_BUCKET_NAME, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY"
+        )
     return errors
 
 
@@ -109,6 +124,7 @@ def deployment_config_warnings(settings: Settings) -> list[str]:
     environment on the mock provider)."""
     if settings.environment not in DEPLOYED_ENVIRONMENTS:
         return []
+    warnings: list[str] = []
     provider = settings.llm_default_provider
     keys = {
         "groq": settings.groq_api_key,
@@ -116,12 +132,19 @@ def deployment_config_warnings(settings: Settings) -> list[str]:
         "anthropic": settings.anthropic_api_key,
     }
     if provider == "mock":
-        return ["LLM_DEFAULT_PROVIDER=mock: analysis and generation return empty placeholders"]
-    if provider in keys and not keys[provider]:
-        return [
+        warnings.append(
+            "LLM_DEFAULT_PROVIDER=mock: analysis and generation return empty placeholders"
+        )
+    elif provider in keys and not keys[provider]:
+        warnings.append(
             f"LLM_DEFAULT_PROVIDER={provider} but its API key is not set: every LLM task will fail"
-        ]
-    return []
+        )
+    if settings.storage_backend == "local":
+        warnings.append(
+            "STORAGE_BACKEND=local: exports live on this container's disk and are lost on "
+            "restart (the UI re-offers export when a file has gone)"
+        )
+    return warnings
 
 
 def validate_deployment_config(settings: Settings | None = None) -> None:
