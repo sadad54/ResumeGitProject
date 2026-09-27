@@ -267,3 +267,39 @@ async def test_repository_metadata_filter_excludes_other_repositories(db_session
         EvidenceQuery(user_id=user.id, text="gRPC service", limit=10, repository_ids=[other_repo.id])
     )
     assert [h.title for h in filtered] == ["gRPC service in repo B"]
+
+
+@pytest.mark.asyncio
+async def test_vectors_from_a_different_embedding_model_are_never_scored(db_session, fixture_env):
+    """ADR-0018: two vectors are only comparable when the same model made
+    them. Identical vectors under different model ids must not match — the
+    query's model decides which rows the vector signal may score."""
+    from proofhire_contracts.embedding import EMBEDDING_DIMENSION
+
+    user, repo, artifact = fixture_env
+    vector = [1.0] + [0.0] * (EMBEDDING_DIMENSION - 1)
+    repo_layer = SQLAlchemyEvidenceRepository(db_session)
+    await repo_layer.save_candidates(
+        [
+            EvidenceCandidate(
+                user_id=user.id, repository_id=repo.id, evidence_type=EvidenceType.SKILL_USAGE,
+                title=f"Row embedded by {model}", normalized_claim=f"Claim from {model}.",
+                description="", confidence=0.8, extraction_method="test",
+                sources=[_source(artifact)], embedding=vector, embedding_model=model,
+            )
+            for model in ("model-a", "model-b")
+        ]
+    )
+
+    hits = await repo_layer.hybrid_search(
+        EvidenceQuery(user_id=user.id, text="zzqx unrelated words", embedding=vector,
+                      embedding_model="model-a", limit=5)
+    )
+    assert [h.title for h in hits] == ["Row embedded by model-a"]
+    assert hits[0].vector_score == pytest.approx(1.0)
+
+    # Without a model id the vector signal is skipped entirely, never guessed.
+    unlabeled = await repo_layer.hybrid_search(
+        EvidenceQuery(user_id=user.id, text="zzqx unrelated words", embedding=vector, limit=5)
+    )
+    assert unlabeled == []

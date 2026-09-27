@@ -27,22 +27,6 @@ async def test_mock_provider_uses_registered_fixture():
     assert result.usage.estimated_cost_usd == 0.0
 
 
-@pytest.mark.asyncio
-async def test_mock_provider_embed_is_deterministic():
-    provider = MockLLMProvider()
-    v1 = await provider.embed(["same text"], model="mock")
-    v2 = await provider.embed(["same text"], model="mock")
-    assert v1 == v2
-    assert len(v1[0]) > 0
-
-
-@pytest.mark.asyncio
-async def test_mock_provider_embed_differs_for_different_text():
-    provider = MockLLMProvider()
-    vectors = await provider.embed(["text a", "text b"], model="mock")
-    assert vectors[0] != vectors[1]
-
-
 def test_provider_factory_returns_mock():
     provider = get_provider("mock")
     assert provider.name == "mock"
@@ -63,12 +47,3 @@ def test_provider_factory_returns_groq_when_key_present(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
     provider = get_provider("groq")
     assert provider.name == "groq"
-
-
-@pytest.mark.asyncio
-async def test_groq_embed_is_not_implemented():
-    from proofhire_worker.intelligence.providers.groq_provider import GroqProvider
-
-    provider = GroqProvider(api_key="test-key")
-    with pytest.raises(NotImplementedError):
-        await provider.embed(["text"], model="mock")

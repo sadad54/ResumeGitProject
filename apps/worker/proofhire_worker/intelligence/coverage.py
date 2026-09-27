@@ -24,7 +24,7 @@ from sqlalchemy import delete, select
 
 from proofhire_worker.db import async_session_factory
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
-from proofhire_worker.intelligence.model_selection import config_for, embedding_model
+from proofhire_worker.intelligence.model_selection import config_for
 from proofhire_worker.intelligence.match_label import resolve_match_label
 from proofhire_worker.intelligence.provider_factory import get_embedding_provider, get_provider
 from proofhire_worker.intelligence.schemas import RerankOutput
@@ -80,8 +80,9 @@ async def _compute_coverage(job_id_str: str) -> None:
                 logger.info("coverage_computation_cancelled", extra={"job_id": job_id_str})
                 return
             try:
+                # Requirements are the query side of asymmetric retrieval.
                 [embedding] = await embedding_provider.embed(
-                    [requirement.text], model=embedding_model()
+                    [requirement.text], input_type="query"
                 )
             except Exception:
                 embedding = None
@@ -94,6 +95,7 @@ async def _compute_coverage(job_id_str: str) -> None:
                     user_id=job.user_id,
                     text=requirement.text,
                     embedding=embedding,
+                    embedding_model=embedding_provider.model_id,
                     skill_keywords=requirement.normalized,
                     limit=CANDIDATES_PER_REQUIREMENT,
                 )

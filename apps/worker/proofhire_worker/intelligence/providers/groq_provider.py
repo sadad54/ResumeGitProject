@@ -2,7 +2,7 @@
 including JSON mode), so this reuses the `openai` SDK client pointed at Groq's
 base URL rather than adding a new dependency — the only real differences from
 OpenAIProvider are the base URL, the model catalogue, and Groq having no
-embeddings endpoint (see `embed` below and `provider_factory.get_embedding_provider`)."""
+embeddings endpoint (embeddings are a separate provider: `intelligence/embeddings.py`)."""
 
 from __future__ import annotations
 
@@ -132,16 +132,4 @@ class GroqProvider:
                 latency_ms=latency_ms,
                 estimated_cost_usd=cost,
             ),
-        )
-
-    async def embed(self, texts: list[str], *, model: str) -> list[list[float]]:
-        # Groq has no embeddings endpoint. Embeddings always go through
-        # OpenAIProvider (or the mock provider) regardless of LLM_DEFAULT_PROVIDER
-        # — see provider_factory.get_embedding_provider(). This method exists
-        # only to satisfy the LLMProvider Protocol; calling it directly is a
-        # caller error.
-        raise NotImplementedError(
-            "GroqProvider has no embeddings endpoint — use "
-            "provider_factory.get_embedding_provider() instead of calling "
-            "GroqProvider.embed() directly."
         )

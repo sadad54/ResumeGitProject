@@ -4,6 +4,7 @@ a provider SDK directly (ADR-0005)."""
 import os
 
 from proofhire_worker.intelligence.embedding_cache import CachedEmbeddingProvider
+from proofhire_worker.intelligence.embeddings import EmbeddingProvider, build_embedding_provider
 from proofhire_worker.intelligence.llm_provider import LLMProvider
 from proofhire_worker.intelligence.providers.anthropic_provider import AnthropicProvider
 from proofhire_worker.intelligence.providers.groq_provider import GroqProvider
@@ -35,11 +36,10 @@ def get_provider(name: str | None = None) -> LLMProvider:
     raise ValueError(f"Unknown LLM provider: {provider_name!r}")
 
 
-def get_embedding_provider() -> LLMProvider:
-    """Embeddings always go through OpenAI regardless of LLM_DEFAULT_PROVIDER —
-    Anthropic has no first-party embeddings endpoint (see AnthropicProvider.embed).
-    Falls back to the mock provider if no OpenAI key is configured, so local dev
-    without any API keys still exercises the full pipeline deterministically."""
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    inner: LLMProvider = OpenAIProvider(api_key) if api_key else MockLLMProvider()
-    return CachedEmbeddingProvider(inner)
+def get_embedding_provider() -> EmbeddingProvider:
+    """Chosen by EMBEDDING_PROVIDER, independently of LLM_DEFAULT_PROVIDER
+    (ADR-0018). Defaults to the local ONNX model, so no deployment silently
+    ends up with meaningless vectors: this used to fall back to hash-derived
+    mock embeddings whenever OPENAI_API_KEY was unset — which is exactly the
+    Groq-only deployment's configuration."""
+    return CachedEmbeddingProvider(build_embedding_provider())

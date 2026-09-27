@@ -17,6 +17,8 @@ dependencies = [
     "anthropic>=0.39",
     "playwright>=1.47",
     "pypdf>=5.0",
+    # Local ONNX embeddings (ADR-0018): real vectors without an API key.
+    "fastembed>=0.7",
     "proofhire-contracts",
     "proofhire-api",
     "proofhire-prompts",

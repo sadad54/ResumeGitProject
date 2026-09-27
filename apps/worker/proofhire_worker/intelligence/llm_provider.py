@@ -1,7 +1,8 @@
 """Provider-independent LLM interface (PRD §25, ADR-0005).
 
 No domain/task code should import an OpenAI or Anthropic SDK directly — everything
-goes through `LLMProvider.structured_generate` / `.embed`. This is what keeps
+goes through `LLMProvider.structured_generate` (embeddings have their own
+provider interface in `embeddings.py`, ADR-0018). This is what keeps
 Phase 2+ tasks (evidence extraction, JD analysis, positioning, writing, claim
 verification) swappable across providers and testable against MockLLMProvider
 without hitting a real API or spending money in CI.
@@ -70,5 +71,3 @@ class LLMProvider(Protocol):
         schema: type[SchemaT],
         model_config: ModelConfig,
     ) -> StructuredResult: ...
-
-    async def embed(self, texts: list[str], *, model: str) -> list[list[float]]: ...

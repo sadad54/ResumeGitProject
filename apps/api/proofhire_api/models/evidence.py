@@ -41,6 +41,10 @@ class Evidence(Base):
         String(20), nullable=False, default=EvidenceStatus.CANDIDATE
     )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIMENSION), nullable=True)
+    # The model that produced `embedding` (ADR-0018): vectors are only
+    # comparable within one model, so retrieval filters on it and the
+    # re-embedding backfill targets rows whose model is not the current one.
+    embedding_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

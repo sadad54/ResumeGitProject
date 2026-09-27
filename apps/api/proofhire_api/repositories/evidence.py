@@ -28,6 +28,15 @@ SKILL_WEIGHT = 0.20
 # enough that fusion touches tens of rows, not the table.
 CANDIDATES_PER_SIGNAL = 50
 
+# HNSW search breadth for the vector branch. pgvector's default (40) is also
+# the most rows one index scan returns, so the branch was silently truncated
+# to 40 of its 50 candidates. Measured on 20k real bge-small embeddings
+# (docs/product/metrics/query-benchmark.md): recall@50 vs exact 0.800 at the
+# defaults, 0.982 at 100 with iterative scan, for ~1.4 ms more per query.
+# Iterative scan keeps scanning until enough rows pass the per-user filter,
+# so one user's evidence isn't starved by other users' nearer vectors.
+HNSW_EF_SEARCH = 100
+
 
 @dataclass
 class EvidenceSourceCandidate:
@@ -53,6 +62,9 @@ class EvidenceCandidate:
     sources: list[EvidenceSourceCandidate]
     skill_names: list[str] = field(default_factory=list)
     embedding: list[float] | None = None
+    # Which model produced `embedding` (ADR-0018). Vectors from different
+    # models live in different spaces; retrieval only compares matching ids.
+    embedding_model: str | None = None
 
 
 @dataclass
@@ -73,6 +85,9 @@ class EvidenceQuery:
     user_id: uuid.UUID
     text: str
     embedding: list[float] | None = None
+    # Required alongside `embedding`: the vector branch only scores evidence
+    # embedded by the same model as the query vector.
+    embedding_model: str | None = None
     skill_keywords: list[str] = field(default_factory=list)
     limit: int = 10
     # Metadata filters (PRD §17): narrow the candidate set *before* fusion
@@ -136,6 +151,7 @@ class SQLAlchemyEvidenceRepository:
                 extraction_method=item.extraction_method,
                 status=EvidenceStatus.CANDIDATE,
                 embedding=item.embedding,
+                embedding_model=item.embedding_model if item.embedding is not None else None,
             )
             self._session.add(evidence)
             await self._session.flush()  # assigns evidence.id
@@ -183,7 +199,7 @@ class SQLAlchemyEvidenceRepository:
         that were weak on every signal could previously fill the tail of a
         result; they scored ~0 and were cut by the `score <= 0` guard anyway.
         """
-        has_embedding = query.embedding is not None
+        has_embedding = query.embedding is not None and query.embedding_model is not None
         has_keywords = bool(query.skill_keywords)
 
         metadata_filters = ""
@@ -207,6 +223,7 @@ class SQLAlchemyEvidenceRepository:
                 f"""
             SELECT e.id FROM evidence e
             WHERE {base_where} AND e.embedding IS NOT NULL
+              AND e.embedding_model = :embedding_model
             ORDER BY e.embedding <=> CAST(:embedding AS vector)
             LIMIT :candidates
             """
@@ -224,7 +241,8 @@ class SQLAlchemyEvidenceRepository:
         candidate_sql = " UNION ".join(f"({b})" for b in branches)
 
         vector_term = (
-            "GREATEST(0, 1 - (e.embedding <=> CAST(:embedding AS vector)))"
+            "CASE WHEN e.embedding_model = :embedding_model "
+            "THEN GREATEST(0, 1 - (e.embedding <=> CAST(:embedding AS vector))) ELSE 0 END"
             if has_embedding
             else "0"
         )
@@ -277,6 +295,7 @@ class SQLAlchemyEvidenceRepository:
             # pgvector's text input format is "[v1,v2,...]" with no spaces —
             # build it explicitly rather than relying on Python's list repr.
             params["embedding"] = "[" + ",".join(str(v) for v in query.embedding) + "]"
+            params["embedding_model"] = query.embedding_model
         if has_keywords:
             params["keywords"] = [k.strip().lower() for k in query.skill_keywords]
             params["keyword_count"] = float(len(query.skill_keywords))
@@ -285,6 +304,16 @@ class SQLAlchemyEvidenceRepository:
         if query.repository_ids:
             params["repository_ids"] = [str(r) for r in query.repository_ids]
 
+        if has_embedding:
+            # Transaction-local (is_local => true): never leaks to other queries
+            # on the pooled connection. One round trip for both settings.
+            await self._session.execute(
+                text(
+                    "SELECT set_config('hnsw.ef_search', :ef, true), "
+                    "set_config('hnsw.iterative_scan', 'relaxed_order', true)"
+                ),
+                {"ef": str(max(HNSW_EF_SEARCH, params["candidates"]))},
+            )
         rows = (await self._session.execute(text(sql), params)).mappings().all()
 
         hits = []

@@ -129,12 +129,3 @@ class OpenAIProvider:
                 estimated_cost_usd=cost,
             ),
         )
-
-    async def embed(self, texts: list[str], *, model: str = "text-embedding-3-small") -> list[list[float]]:
-        response = await with_retries(
-            lambda: self._client.embeddings.create(model=model, input=texts),
-            is_retryable=_is_retryable,
-            provider=self.name,
-            task="embed",
-        )
-        return [item.embedding for item in response.data]

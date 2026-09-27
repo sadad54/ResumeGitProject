@@ -24,18 +24,20 @@ exists. Anything cut goes in **Known gaps** with the reason.
 | F10 | PDFs served from absolute local paths; API responses leak server filesystem paths (`pdf_ref`); stale refs 500 after a restart wipes the Space disk | `routers/generation.py`, `render/storage.py` |
 | F11 | `GET /documents` ordered by random UUID; `/documents/{id}/claims` issues 4 queries per claim | `routers/generation.py` |
 | F12 | Home page still shows placeholder copy ("land here starting Phase 2+") | `app/page.tsx` |
+| F13 | GitHub OAuth callback redirects to `/settings?github=connected`, but Settings has no GitHub panel | `routers/github.py:101` vs `app/settings/page.tsx` |
+| F14 | C: drive at 0 bytes free mid-session (WSL disk + caches); cleared npm/pip caches with the user's OK (+5.7 GB) | `Get-PSDrive` |
 
 ## Phase A — green CI, contract sync
-- [ ] A1 Regenerate OpenAPI + TS types (F1); prove with `check:api-types` and the pytest drift guard
-- [ ] A2 Pytest guard that fails locally when `openapi.json` is stale (so drift is caught before a push, not after)
+- [x] A1 Regenerate OpenAPI + TS types (F1) — `591de7a`
+- [x] A2 Pytest guard for a stale `openapi.json` — `test_openapi_current.py`, verified failing on master's doc and passing after; it then caught my own B2 contract change before commit
 
 ## Phase B — backend fully functioning
-- [ ] B1 Production config validation: refuse to boot with default/weak secrets or localhost origins (F6)
-- [ ] B2 Object storage: local + S3 backends, portable refs, signed download URLs, stale-object self-healing, purge on account deletion, no path leakage (F10)
+- [x] B1 Production config validation (F6) — `dceaa88`, 16 tests; real `.env.production` validated as the deploy script assembles it: 0 errors
+- [x] B2 Object storage (F10) — `9258292`: local + S3 (moto-tested), owner-scoped keys, signed URLs, 410 self-healing, purge-on-delete, no path leakage; ADR-0016 gap closed
 - [ ] B3 Real embeddings without an API key: ONNX bge-small (384-d) default, OpenAI `dimensions=384` optional; migration to vector(384) + HNSW + per-row `embedding_model`; backfill command (F5)
 - [ ] B4 Groq model defaults that exist; startup model-availability check (F4)
 - [ ] B5 SSE: verify the late-subscriber race; if real, replay via Redis Streams
-- [ ] B6 Fix documents ordering + claims N+1; `is_demo` on `/auth/me`; overview stats endpoint (F11)
+- [ ] B6 ~~documents ordering~~ ~~claims N+1~~ (done in `9258292`: migration 0010, one DISTINCT ON query); `is_demo` on `/auth/me`; overview stats endpoint (F11)
 - [ ] B7 Real end-to-end run on Groq: sync a real repo → evidence → JD → coverage → generate → verify → export → download
 
 ## Phase C — frontend ↔ backend in sync
@@ -67,3 +69,26 @@ exists. Anything cut goes in **Known gaps** with the reason.
 
 ## Known gaps
 (filled in as items are cut, with the reason)
+
+## Handoff — 2026-09-27 (session paused at usage limit)
+
+Committed and verified: A1, A2, B1, B2, B3 (local bge-small embeddings, 384-d + HNSW,
+ef_search=100 + iterative scan after measuring recall@50 0.800 → 0.982 on real vectors),
+B4 (per-provider model defaults + live `check_models`; all 7 Groq task models verified).
+
+Uncommitted, written but NOT yet run/typechecked:
+- F15 OAuth callback always redirects back (`routers/github.py`, `tests/test_github_callback.py`)
+- F16 run-level `github.sync.completed/failed` events (contracts enums.py/.ts, `ingestion/sync.py`, `routers/events.py`)
+- `GET /api/v1/me/overview` + `is_demo` on `/auth/me` (`routers/overview.py`, `schemas/overview.py`, `tests/test_overview.py`); regenerated openapi.json/TS types
+- Frontend C1–C3 partly migrated: `lib/api.ts` (single-flight refresh on 401, parsed errors), `api-client.ts`,
+  `session.tsx`, `queries.ts`, `providers.tsx`, layout, app-shell, `session-ui.tsx`, auth-panel, home, settings,
+  github-panel, account-settings, resume-upload, evidence-explorer. STILL TO MIGRATE: job-workspace,
+  resume-workspace, evidence-constellation, applications-board, command-palette, capture-handoff,
+  document-preview, events.ts (→ authFetch). New CSS classes (ph-banner*, ph-hero, ph-stat*, ph-steps,
+  ph-auth*, ph-user, ph-button-primary/danger, ph-danger, ph-settings, ph-progress, ph-repo-list, ph-facts, ph-ok)
+  are referenced but not yet added to globals.css. Visual/Playwright mocks need /auth/me + /me/overview shapes.
+- `Dockerfile.space` (bakes model) + `space-entrypoint.sh` (check_models, reembed) — needs CI Docker build
+- `benchmark_queries.py` rewrite (`--embeddings real|random`, ANN sweep) — a run was in progress; old
+  IVFFlat results renamed to `query-benchmark-ivfflat-1536d.*` (staged rename)
+- `scripts/dev-backend.sh`, `.gitignore` (.dev/)
+Next: finish C, then D (CI container smoke test, deploy script + Vercel env), E (SkillSpan/ESCO eval), F, G.

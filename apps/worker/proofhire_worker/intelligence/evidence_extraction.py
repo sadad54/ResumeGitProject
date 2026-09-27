@@ -27,13 +27,13 @@ from proofhire_api.security.token_crypto import decrypt_token
 from proofhire_api.services.github_client import GitHubClient
 from proofhire_api.telemetry import traced_stage
 from proofhire_contracts import EvidenceType, RunEventName
-from proofhire_contracts.embedding import EMBEDDING_MODEL
 from proofhire_prompts.evidence_extract_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
 from sqlalchemy import select
 
 from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.intelligence.confidence import combine_confidence
+from proofhire_worker.intelligence.embeddings import evidence_embedding_text
 from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
 from proofhire_worker.intelligence.model_selection import config_for
 from proofhire_worker.intelligence.provider_factory import get_embedding_provider, get_provider
@@ -167,7 +167,7 @@ async def _extract_for_repository(
                 },
             )
 
-            candidates: list[EvidenceCandidate] = []
+            accepted = []
             for item in result.value.evidence:
                 try:
                     evidence_type = EvidenceType(item.evidence_type)
@@ -191,14 +191,25 @@ async def _extract_for_repository(
                     )
                 if not sources:
                     continue  # PRD §14: no provenance, no evidence
+                accepted.append((item, evidence_type, sources))
 
-                embed_text = f"{item.title}. {item.normalized_claim} {item.description}"
+            # One embedding call per file group rather than one per item.
+            # A failure leaves the vectors empty (lexical and skill retrieval
+            # still work) and the re-embedding backfill fills them later.
+            embeddings: list[list[float] | None] = [None] * len(accepted)
+            if accepted:
                 try:
-                    [embedding] = await embedding_provider.embed([embed_text], model=EMBEDDING_MODEL)
+                    embeddings = await embedding_provider.embed(
+                        [
+                            evidence_embedding_text(i.title, i.normalized_claim, i.description)
+                            for i, _t, _s in accepted
+                        ]
+                    )
                 except Exception:
-                    embedding = None
                     logger.warning("embedding_failed", extra={"repository_id": repository_id_str})
 
+            candidates: list[EvidenceCandidate] = []
+            for (item, evidence_type, sources), embedding in zip(accepted, embeddings, strict=True):
                 confidence = combine_confidence(
                     semantic_confidence=item.confidence,
                     source_count=len(sources),
@@ -219,6 +230,7 @@ async def _extract_for_repository(
                         sources=sources,
                         skill_names=item.skills,
                         embedding=embedding,
+                        embedding_model=embedding_provider.model_id if embedding else None,
                     )
                 )
 
