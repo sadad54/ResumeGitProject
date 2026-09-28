@@ -29,6 +29,10 @@ class ModelConfig:
     model: str
     temperature: float = 0.0
     max_tokens: int = 4096
+    # Reasoning models only (Groq's gpt-oss family): "low" | "medium" | "high".
+    # None leaves the provider default. Reasoning tokens count against
+    # max_tokens, so effort decides how much of the budget is left for the answer.
+    reasoning_effort: str | None = None
 
 
 @dataclass

@@ -50,11 +50,18 @@ function useAuthed() {
   return useSession().status === "authenticated";
 }
 
+/** Repository statuses that will still change without the user doing anything. */
+export const REPOSITORY_BUSY = ["queued", "syncing", "extracting"];
+
 export function useOverview() {
   return useQuery({
     queryKey: qk.overview,
     queryFn: async () => unwrap(await api.GET("/api/v1/me/overview")),
     enabled: useAuthed(),
+    // Evidence arrives in the background after a sync; keep the counts live
+    // until every repository has settled.
+    refetchInterval: (query) =>
+      (query.state.data?.repositories.in_progress ?? 0) > 0 ? 5000 : false,
   });
 }
 
@@ -117,6 +124,8 @@ export function useRepositories() {
     queryKey: qk.repositories,
     queryFn: async () => unwrap(await api.GET("/api/v1/github/repositories")),
     enabled: useAuthed(),
+    refetchInterval: (query) =>
+      query.state.data?.some((r) => REPOSITORY_BUSY.includes(r.sync_status)) ? 5000 : false,
   });
 }
 

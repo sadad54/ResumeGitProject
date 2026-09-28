@@ -28,6 +28,8 @@ _OVERVIEW_SQL = text(
       (SELECT count(*) FROM repositories WHERE user_id = :u AND selected) AS repositories_selected,
       (SELECT count(*) FROM repositories
          WHERE user_id = :u AND last_analyzed_sha IS NOT NULL) AS repositories_synced,
+      (SELECT count(*) FROM repositories WHERE user_id = :u
+         AND sync_status IN ('queued', 'syncing', 'extracting')) AS repositories_in_progress,
       (SELECT count(*) FROM evidence WHERE user_id = :u) AS evidence_total,
       (SELECT count(*) FROM evidence WHERE user_id = :u AND status = 'confirmed')
          AS evidence_confirmed,
@@ -65,6 +67,7 @@ async def get_overview(
                 "total": row["repositories_total"],
                 "selected": row["repositories_selected"],
                 "synced": row["repositories_synced"],
+                "in_progress": row["repositories_in_progress"],
             },
             "evidence": {
                 "total": row["evidence_total"],

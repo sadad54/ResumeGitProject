@@ -122,6 +122,7 @@ export enum SyncStatus {
   Idle = "idle",
   Queued = "queued",
   Syncing = "syncing",
+  Extracting = "extracting",
   Completed = "completed",
   Failed = "failed",
 }

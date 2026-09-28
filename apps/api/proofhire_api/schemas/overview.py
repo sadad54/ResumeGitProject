@@ -14,6 +14,8 @@ class RepositoryCounts(BaseModel):
     total: int
     selected: int
     synced: int
+    # Queued, syncing, or still extracting evidence: the UI polls while > 0.
+    in_progress: int
 
 
 class EvidenceCounts(BaseModel):

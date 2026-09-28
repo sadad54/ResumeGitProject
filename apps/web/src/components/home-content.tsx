@@ -115,6 +115,13 @@ function WorkspaceOverview() {
               ? `GitHub connected as @${o.github.login}${o.github.last_sync_at ? ` · last synced ${new Date(o.github.last_sync_at).toLocaleString()}` : ""}.`
               : "GitHub isn't connected yet."}
           </p>
+          {o.repositories.in_progress > 0 && (
+            <p className="mt-2 text-sm" role="status" aria-live="polite">
+              Finding evidence in {o.repositories.in_progress}{" "}
+              {o.repositories.in_progress === 1 ? "repository" : "repositories"}… these
+              numbers update as it finishes.
+            </p>
+          )}
         </div>
         {next && (
           <Link className="ph-button ph-button-primary" href={next.href}>

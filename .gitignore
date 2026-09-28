@@ -70,3 +70,6 @@ htmlcov/
 **/playwright-report/
 reports/
 .vercel
+
+# Local dev stack (scripts/dev-backend.sh): pids and logs
+.dev/

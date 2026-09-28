@@ -7,9 +7,12 @@
 # - Redis is in-container and ephemeral: rate-limit counters, the revoked-token
 #   denylist and queued jobs are lost on restart (documented tradeoff in
 #   OPERATIONS.md §2). Postgres (Supabase) is external and durable.
-# - Exports are written to container disk and vanish on restart; they are
-#   regenerable from the database.
+# - Exports are written to container disk and vanish on restart unless
+#   STORAGE_BACKEND=s3; the API answers 410 for a vanished export and the UI
+#   re-offers Export (services/object_storage.py).
 # - One replica. That is also what keeps the local export store correct.
+# - The embedding model (bge-small, ONNX, ~65 MB) is baked in at build time,
+#   so the first request after a cold start doesn't download it (ADR-0018).
 FROM python:3.13-slim AS build
 WORKDIR /app
 RUN python -m venv /venv && /venv/bin/pip install --no-cache-dir --upgrade pip setuptools
@@ -24,7 +27,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends redis-server \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /venv /venv
 ENV PATH="/venv/bin:$PATH" PYTHONUNBUFFERED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-    REDIS_URL=redis://127.0.0.1:6379/0 LOCAL_STORAGE_ROOT=/data/storage
+    REDIS_URL=redis://127.0.0.1:6379/0 LOCAL_STORAGE_ROOT=/data/storage \
+    EMBEDDING_PROVIDER=local EMBEDDING_CACHE_DIR=/models/fastembed HF_HUB_DISABLE_TELEMETRY=1
+# Fetch the embedding model once, into the image. Embedding one string here
+# also fails the build if the model ever stops producing 384-d vectors (the
+# evidence.embedding column's size, packages/contracts embedding.py).
+RUN /venv/bin/python -c "from fastembed import TextEmbedding as T; m = T('BAAI/bge-small-en-v1.5', cache_dir='/models/fastembed'); assert len(next(iter(m.embed(['ok'])))) == 384"
 RUN /venv/bin/python -m playwright install --with-deps chromium \
     && /venv/bin/pip uninstall -y pip setuptools \
     && rm -rf /usr/local/lib/python3.13/site-packages/pip* /usr/local/lib/python3.13/site-packages/setuptools* \
@@ -34,7 +42,7 @@ COPY apps/api/alembic.ini apps/api/alembic.ini
 COPY infra/docker/space-entrypoint.sh /entrypoint.sh
 # HF Spaces run as uid 1000; make writable paths owned by it.
 RUN chmod +x /entrypoint.sh && useradd -m -u 1000 app && mkdir -p /data/storage /var/lib/redis \
-    && chown -R app:app /app /data /var/lib/redis /ms-playwright
+    && chown -R app:app /app /data /var/lib/redis /ms-playwright /models
 USER app
 EXPOSE 7860
 CMD ["/entrypoint.sh"]

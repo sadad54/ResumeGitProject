@@ -1504,6 +1504,8 @@ export interface components {
         };
         /** RepositoryCounts */
         RepositoryCounts: {
+            /** In Progress */
+            in_progress: number;
             /** Selected */
             selected: number;
             /** Synced */
@@ -1587,7 +1589,7 @@ export interface components {
          * SyncStatus
          * @enum {string}
          */
-        SyncStatus: "idle" | "queued" | "syncing" | "completed" | "failed";
+        SyncStatus: "idle" | "queued" | "syncing" | "extracting" | "completed" | "failed";
         /** SyncStatusResponse */
         SyncStatusResponse: {
             /** Error */

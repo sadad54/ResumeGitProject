@@ -11,6 +11,15 @@ import { DEMO_READ_ONLY } from "./session-ui";
 
 type ProgressLine = { id: number; text: string; tone?: "done" | "error" };
 
+const STATUS_TEXT: Record<string, string> = {
+  idle: "not synced yet",
+  queued: "queued…",
+  syncing: "fetching files…",
+  extracting: "finding evidence…",
+  completed: "✓ evidence ready",
+  failed: "failed — sync again",
+};
+
 /** Human-readable lines for the worker's run events (RunEventName). */
 function describe(event: string, data: Record<string, unknown>, repos: Repository[]): string | null {
   const name = (id: unknown) => {
@@ -33,7 +42,7 @@ function describe(event: string, data: Record<string, unknown>, repos: Repositor
     case "evidence.created":
       return typeof data.title === "string" ? `Evidence found: ${data.title}` : null;
     case "github.sync.completed":
-      return "Sync complete. Evidence extraction for changed files continues in the background.";
+      return "Files synced. Evidence extraction continues in the background; each repository shows “evidence ready” when it's done.";
     case "github.sync.failed":
       return typeof data.message === "string" ? data.message : "Sync failed.";
     default:
@@ -219,7 +228,9 @@ export function GitHubPanel() {
                   <span>
                     {repo.owner}/{repo.name}
                   </span>
-                  <span className="text-xs text-neutral-500">{repo.sync_status}</span>
+                  <span className="text-xs text-neutral-500" data-status={repo.sync_status}>
+                    {STATUS_TEXT[repo.sync_status] ?? repo.sync_status}
+                  </span>
                 </label>
               </li>
             ))}

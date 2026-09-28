@@ -21,7 +21,7 @@ export const OVERVIEW = {
     connected_at: "2026-09-01T00:00:00Z",
     last_sync_at: null,
   },
-  repositories: { total: 1, selected: 1, synced: 1 },
+  repositories: { total: 1, selected: 1, synced: 1, in_progress: 0 },
   evidence: { total: 0, confirmed: 0, candidate: 0, stale: 0 },
   jobs: { total: 0, ready: 0 },
   documents: { total: 0, exported: 0 },

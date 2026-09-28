@@ -121,6 +121,10 @@ class SyncStatus(StrEnum):
     IDLE = "idle"
     QUEUED = "queued"
     SYNCING = "syncing"
+    # Files fetched and classified; evidence extraction (LLM) still running.
+    # Repository rows only: the extraction actor settles it to COMPLETED or
+    # FAILED, which is how the UI learns a repository's evidence is ready.
+    EXTRACTING = "extracting"
     COMPLETED = "completed"
     FAILED = "failed"
 

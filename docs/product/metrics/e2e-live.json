@@ -1,0 +1,196 @@
+{
+  "generated_at": "2026-09-28T01:12:09.459899+00:00",
+  "api": "http://localhost:8000",
+  "repositories": [
+    "sadad54/agentic-planner",
+    "sadad54/interviewpilot",
+    "sadad54/SAFE-RAG"
+  ],
+  "llm_provider": "groq",
+  "models": {
+    "evidence_extract": "openai/gpt-oss-20b",
+    "jd_extract": "openai/gpt-oss-120b",
+    "rerank": "openai/gpt-oss-20b",
+    "position": "openai/gpt-oss-120b",
+    "resume_write": "openai/gpt-oss-120b",
+    "cover_letter_write": "openai/gpt-oss-120b",
+    "claim_verify": "openai/gpt-oss-120b"
+  },
+  "embedding_model": "BAAI/bge-small-en-v1.5",
+  "stages": {
+    "signup": 0.4,
+    "connect_github": 0.5,
+    "refresh_repositories": 0.8,
+    "sync": 63.4,
+    "evidence_extraction": 171.1,
+    "analyze_job": 60.4,
+    "generate_resume": 6.4,
+    "export_and_download": 2.9
+  },
+  "sync": {
+    "events": {
+      "ping": 1,
+      "github.sync.started": 1,
+      "github.repo.analyzing": 3,
+      "github.repo.completed": 3,
+      "evidence.created": 12,
+      "github.sync.completed": 1
+    },
+    "repositories": {
+      "sadad54/agentic-planner": {
+        "artifacts_created": 20,
+        "files_scanned": 20,
+        "evidence_marked_stale": 0
+      },
+      "sadad54/interviewpilot": {
+        "artifacts_created": 74,
+        "files_scanned": 74,
+        "evidence_marked_stale": 0
+      },
+      "sadad54/SAFE-RAG": {
+        "artifacts_created": 63,
+        "files_scanned": 69,
+        "evidence_marked_stale": 0
+      }
+    }
+  },
+  "evidence": {
+    "count": 54,
+    "repository_status": {
+      "sadad54/SAFE-RAG": "completed",
+      "sadad54/agentic-planner": "completed",
+      "sadad54/interviewpilot": "completed"
+    },
+    "by_type": {
+      "skill_usage": 12,
+      "implementation": 14,
+      "architecture": 7,
+      "feature": 14,
+      "testing": 4,
+      "data_pipeline": 1,
+      "deployment": 2
+    },
+    "examples": [
+      "Core dependencies for CPU execution",
+      "Schema validation for answer JSON",
+      "Optional GPU and model dependencies",
+      "Fast local generation optional dependency",
+      "CPU\u2011only pipeline with optional GPU for generation",
+      "Attribution screening logic",
+      "Deceptive grounding study design",
+      "GPU cluster deployment workflow",
+      "Inter\u2011annotator agreement reporting",
+      "Python environment and dependency installation"
+    ]
+  },
+  "job": {
+    "status": "ready",
+    "role": "AI Engineer \u2014 LLM Applications",
+    "company": null
+  },
+  "coverage": {
+    "requirements": 8,
+    "labels": {
+      "partial": 5,
+      "strong": 2,
+      "gap": 1
+    },
+    "required_labels": {
+      "partial": 3,
+      "strong": 1
+    }
+  },
+  "generation": {
+    "claims": 1,
+    "verification": {
+      "partially_supported": 1
+    },
+    "claims_with_evidence": 0,
+    "token_usage": {
+      "input_tokens": 4548,
+      "output_tokens": 1960,
+      "call_count": 3
+    },
+    "llm_latency_ms_total": 5674,
+    "prompt_versions": [
+      "position:v1",
+      "resume_write:v1",
+      "claim_verify:v1"
+    ],
+    "estimated_cost_usd_reported": 0.0,
+    "resume_bullets": 0,
+    "skills_listed": 14
+  },
+  "export": {
+    "page_count": 1,
+    "overflowed": false,
+    "pdf_bytes": 22862,
+    "content_disposition": "attachment; filename=\"resume-v1-6d078400.pdf\""
+  },
+  "ok": true,
+  "llm_usage": {
+    "per_task": {
+      "evidence_extract": {
+        "calls": 10,
+        "input_tokens": 30503,
+        "output_tokens": 6670,
+        "latency_ms": 280919,
+        "models": [
+          "openai/gpt-oss-20b"
+        ]
+      },
+      "jd_extract": {
+        "calls": 1,
+        "input_tokens": 1090,
+        "output_tokens": 475,
+        "latency_ms": 1389,
+        "models": [
+          "openai/gpt-oss-120b"
+        ]
+      },
+      "rerank": {
+        "calls": 8,
+        "input_tokens": 6709,
+        "output_tokens": 1150,
+        "latency_ms": 54516,
+        "models": [
+          "openai/gpt-oss-20b"
+        ]
+      },
+      "position": {
+        "calls": 1,
+        "input_tokens": 802,
+        "output_tokens": 603,
+        "latency_ms": 1756,
+        "models": [
+          "openai/gpt-oss-120b"
+        ]
+      },
+      "resume_write": {
+        "calls": 1,
+        "input_tokens": 1639,
+        "output_tokens": 618,
+        "latency_ms": 1843,
+        "models": [
+          "openai/gpt-oss-120b"
+        ]
+      },
+      "claim_verify": {
+        "calls": 1,
+        "input_tokens": 2107,
+        "output_tokens": 739,
+        "latency_ms": 2076,
+        "models": [
+          "openai/gpt-oss-120b"
+        ]
+      }
+    },
+    "totals": {
+      "calls": 22,
+      "input_tokens": 42850,
+      "output_tokens": 10255
+    }
+  },
+  "cleanup": "user deleted (204)",
+  "total_seconds": 305.9
+}

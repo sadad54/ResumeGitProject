@@ -1640,6 +1640,10 @@
       },
       "RepositoryCounts": {
         "properties": {
+          "in_progress": {
+            "title": "In Progress",
+            "type": "integer"
+          },
           "selected": {
             "title": "Selected",
             "type": "integer"
@@ -1656,7 +1660,8 @@
         "required": [
           "total",
           "selected",
-          "synced"
+          "synced",
+          "in_progress"
         ],
         "title": "RepositoryCounts",
         "type": "object"
@@ -1854,6 +1859,7 @@
           "idle",
           "queued",
           "syncing",
+          "extracting",
           "completed",
           "failed"
         ],

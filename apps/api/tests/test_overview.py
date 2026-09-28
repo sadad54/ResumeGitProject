@@ -51,7 +51,7 @@ def test_a_new_account_starts_empty_and_disconnected(client, account):
     assert body["github"] == {
         "connected": False, "login": None, "connected_at": None, "last_sync_at": None
     }
-    assert body["repositories"] == {"total": 0, "selected": 0, "synced": 0}
+    assert body["repositories"] == {"total": 0, "selected": 0, "synced": 0, "in_progress": 0}
     assert body["evidence"]["total"] == 0
     assert body["documents"] == {"total": 0, "exported": 0}
 
@@ -63,7 +63,7 @@ async def _seed(user_id: str) -> None:
                                      token_ref="encrypted", scopes=[]))
         repo = Repository(user_id=uid, provider_repo_id=uuid.uuid4().int % 10**9, owner="octocat",
                           name="svc", url="https://github.com/octocat/svc", selected=True,
-                          last_analyzed_sha="a" * 40)
+                          last_analyzed_sha="a" * 40, sync_status="extracting")
         other = Repository(user_id=uid, provider_repo_id=uuid.uuid4().int % 10**9,
                            owner="octocat", name="docs", url="https://github.com/octocat/docs")
         session.add_all([repo, other])
@@ -100,7 +100,7 @@ def test_overview_counts_only_what_the_user_owns(client, account):
     try:
         body = client.get("/api/v1/me/overview", headers=auth).json()
         assert body["github"]["connected"] is True and body["github"]["login"] == "octocat"
-        assert body["repositories"] == {"total": 2, "selected": 1, "synced": 1}
+        assert body["repositories"] == {"total": 2, "selected": 1, "synced": 1, "in_progress": 1}
         assert body["evidence"] == {"total": 4, "confirmed": 2, "candidate": 1, "stale": 1}
         assert body["jobs"] == {"total": 2, "ready": 1}
         assert body["documents"] == {"total": 2, "exported": 1}
