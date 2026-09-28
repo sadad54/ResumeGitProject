@@ -28,6 +28,18 @@ SKILL_WEIGHT = 0.20
 # enough that fusion touches tens of rows, not the table.
 CANDIDATES_PER_SIGNAL = 50
 
+# The lexical signal's query: the requirement's lexemes OR'd, ranked by
+# ts_rank_cd. It was plainto_tsquery, which ANDs every lexeme: on 926
+# human-labelled job-ad sentences it found nothing for 908 (98%), so the
+# hybrid scored exactly as dense retrieval alone. OR'd, the hybrid's MRR rose
+# +0.022 [95% CI +0.007, +0.037] and Recall@5 +0.025 [+0.007, +0.043], paired
+# over the same queries (docs/product/metrics/retrieval-eval.md). NULL when
+# the text has no lexemes at all (only stopwords): then nothing matches.
+_LEXICAL_TSQUERY = "NULLIF(replace(plainto_tsquery('english', :text)::text, '&', '|'), '')::tsquery"
+# COALESCE before LEAST: LEAST ignores NULLs, so LEAST(1.0, NULL) is 1.0 and
+# a stopwords-only query would score every candidate as a perfect match.
+_LEXICAL_SCORE = f"LEAST(1.0, COALESCE(ts_rank_cd(e.search_vector, {_LEXICAL_TSQUERY}), 0))"
+
 # HNSW search breadth for the vector branch. pgvector's default (40) is also
 # the most rows one index scan returns, so the branch was silently truncated
 # to 40 of its 50 candidates. Measured on 20k real bge-small embeddings
@@ -213,8 +225,8 @@ class SQLAlchemyEvidenceRepository:
             f"""
             SELECT e.id FROM evidence e
             WHERE {base_where}
-              AND e.search_vector @@ plainto_tsquery('english', :text)
-            ORDER BY ts_rank_cd(e.search_vector, plainto_tsquery('english', :text)) DESC
+              AND e.search_vector @@ {_LEXICAL_TSQUERY}
+            ORDER BY ts_rank_cd(e.search_vector, {_LEXICAL_TSQUERY}) DESC
             LIMIT :candidates
             """
         ]
@@ -268,14 +280,14 @@ class SQLAlchemyEvidenceRepository:
             WITH candidates AS ({candidate_sql})
             SELECT
                 e.id, e.title, e.normalized_claim, e.evidence_type, e.confidence,
-                LEAST(1.0, ts_rank_cd(e.search_vector, plainto_tsquery('english', :text))) AS lexical_score,
+                {_LEXICAL_SCORE} AS lexical_score,
                 {vector_term} AS vector_score,
                 {skill_term} AS skill_score
             FROM candidates c
             JOIN evidence e ON e.id = c.id
             {skill_join}
             ORDER BY (
-                :lexical_weight * LEAST(1.0, ts_rank_cd(e.search_vector, plainto_tsquery('english', :text)))
+                :lexical_weight * {_LEXICAL_SCORE}
                 + :vector_weight * {vector_term}
                 + :skill_weight * {skill_term}
             ) DESC

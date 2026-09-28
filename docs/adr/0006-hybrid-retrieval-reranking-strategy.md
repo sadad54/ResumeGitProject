@@ -65,3 +65,31 @@ a hybrid retriever at all over pure lexical search.
 - Revisit this ADR once Phase 9's benchmark can empirically compare weighted-sum
   vs. RRF vs. alternative weight values on real labeled data — treat the weights
   above as a documented starting point, not a final tuned value.
+
+## Update 2026-09-28: measured on human-labelled data
+
+The benchmark this ADR deferred to now exists, on a public proxy task:
+ranking the 13,896 ESCO skills for 926 job-ad sentences whose relevant skills
+were assigned by human annotators (TechWolf/SkillSpan, CC BY 4.0), through
+the same Postgres full-text query, embedding model and fusion code the
+product runs (`apps/worker/scripts/eval_skill_retrieval.py`; results and
+caveats in `docs/product/metrics/retrieval-eval.md`). Differences are paired
+over the same queries with 95% bootstrap confidence intervals.
+
+- **Weighted sum stays.** Reciprocal-rank fusion of the same two signals was
+  worse by ΔMRR −0.061 [−0.078, −0.046]. The weights above are unchanged: this
+  data has no skill-overlap signal to tune against.
+- **The lexical signal was near-dead and now isn't.** `plainto_tsquery` ANDs
+  every term of the requirement; on real requirement sentences it found
+  nothing for 908 of 926 queries, so the hybrid scored exactly like dense
+  retrieval alone (MRR 0.357 both). ORing the same lexemes (ranked by the same
+  `ts_rank_cd`) made the lexical signal useful (MRR 0.012 → 0.167) and the
+  hybrid better than either signal: ΔMRR +0.022 [+0.007, +0.037], ΔRecall@5
+  +0.025 [+0.007, +0.043]. `hybrid_search` now uses the OR form.
+- **The BGE query instruction stays off.** It helped dense retrieval alone
+  slightly (ΔMRR +0.014 [+0.001, +0.028]) but added nothing to the hybrid
+  (+0.001 [−0.009, +0.011]).
+
+The proxy's corpus is skill labels, not ProofHire evidence, so absolute
+scores don't transfer; the relative comparisons are what this licenses.
+Tuning the weights, and the reranker, still needs judgments on real evidence.
