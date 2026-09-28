@@ -105,10 +105,18 @@ class ExperienceEntryOutput(BaseModel):
     bullets: list[str] = Field(default_factory=list)
 
 
+class ProjectEntryOutput(BaseModel):
+    name: str = Field(description="The repository exactly as labelled in the evidence, e.g. owner/name")
+    bullets: list[str] = Field(default_factory=list)
+
+
 class ResumeContentOutput(BaseModel):
     summary: str
     skills: list[str] = Field(default_factory=list)
     experience: list[ExperienceEntryOutput] = Field(default_factory=list)
+    # Repository work (resume_write:v2). Defaults empty, so documents written
+    # under v1 (no projects key) still load.
+    projects: list[ProjectEntryOutput] = Field(default_factory=list)
 
 
 class CoverLetterContentOutput(BaseModel):

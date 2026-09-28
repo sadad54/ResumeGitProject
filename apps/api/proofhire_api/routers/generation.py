@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Literal
 
@@ -29,6 +30,8 @@ from proofhire_api.schemas.generation import (
 )
 from proofhire_api.security.rate_limit import export_rate_limit, generate_rate_limit
 from proofhire_api.services.object_storage import get_object_storage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["generation"])
 
@@ -153,6 +156,12 @@ async def export_document_endpoint(
             db, document, current_user.email, template, page_size
         )
     except ParseBackValidationError as exc:
+        # Logged: an HTTPException carries no traceback, so this failure used
+        # to leave nothing in the logs but the access line's 500.
+        logger.error(
+            "export_parse_back_failed",
+            extra={"document_id": str(document_id), "missing": exc.missing[:5]},
+        )
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Export failed parse-back validation — missing content: {exc.missing}",

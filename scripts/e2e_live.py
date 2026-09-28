@@ -393,8 +393,19 @@ def main() -> None:
                 "prompt_versions": run_info["prompt_versions"],
                 "estimated_cost_usd_reported": run_info["estimated_cost"],
                 "resume_bullets": sum(
-                    len(e["bullets"]) for e in document["content_json"].get("experience", [])
+                    len(e["bullets"])
+                    for section in ("experience", "projects")
+                    for e in document["content_json"].get(section, [])
                 ),
+                "projects": document["content_json"].get("projects", []),
+                "claims_detail": [
+                    {
+                        "text": c["claim_text"],
+                        "status": c["verification_status"],
+                        "evidence": c.get("evidence_title"),
+                    }
+                    for c in claims
+                ],
                 "skills_listed": len(document["content_json"].get("skills", [])),
             }
 

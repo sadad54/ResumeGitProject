@@ -31,6 +31,8 @@ type ResumeContent = {
     end_date: string;
     bullets: string[];
   }[];
+  // resume_write:v2; absent on documents written before it.
+  projects?: { name: string; bullets: string[] }[];
 };
 type CoverLetterContent = { body_paragraphs: string[] };
 type DocumentType = "resume" | "cover_letter";
@@ -356,13 +358,20 @@ function Workspace() {
                 </span>
               ))}
             </div>
-            {(doc.content_json as ResumeContent).experience.map((entry, i) => (
+            {[
+              ...(doc.content_json as ResumeContent).experience.map((entry) => ({
+                heading: `${entry.title} — ${entry.employer} (${entry.start_date}–${entry.end_date})`,
+                bullets: entry.bullets,
+              })),
+              ...((doc.content_json as ResumeContent).projects ?? []).map((project) => ({
+                heading: `Project · ${project.name}`,
+                bullets: project.bullets,
+              })),
+            ].map((section, i) => (
               <div key={i}>
-                <div className="text-sm font-medium">
-                  {entry.title} — {entry.employer} ({entry.start_date}–{entry.end_date})
-                </div>
+                <div className="text-sm font-medium">{section.heading}</div>
                 <ul className="ml-4 list-disc space-y-1 text-sm">
-                  {entry.bullets.map((bullet, j) => {
+                  {section.bullets.map((bullet, j) => {
                     const claim = claimsByText.get(bullet);
                     return (
                       <li

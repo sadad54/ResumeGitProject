@@ -21,9 +21,12 @@ from proofhire_worker.render.parse_back import (
     validate_parse_back,
 )
 from proofhire_worker.render.pdf_renderer import DEFAULT_PAGE_SIZE, PageSize, render_html_to_pdf
-from proofhire_worker.render.templates import render_cover_letter_html, render_resume_html
+from proofhire_worker.render.templates import (
+    render_cover_letter_html,
+    render_resume_html,
+    resume_sections,
+)
 
-RESUME_REQUIRED_SECTIONS = ["Summary", "Skills", "Experience"]
 
 
 class ParseBackValidationError(Exception):
@@ -47,7 +50,7 @@ async def export_document(
     )
     if document.type == DocumentType.RESUME:
         html_content = render_resume_html(document.content_json, contact_email, chosen_template)
-        required_texts = list(RESUME_REQUIRED_SECTIONS)
+        required_texts = resume_sections(document.content_json)
     else:
         html_content = render_cover_letter_html(document.content_json, contact_email)
         required_texts = []

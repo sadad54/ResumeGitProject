@@ -52,11 +52,24 @@ TEMPLATE_STYLES = {
 }
 
 
+def resume_sections(content: dict) -> list[str]:
+    """The section headings a resume renders with: empty sections are left
+    out. Export checks the PDF for exactly these, so rendering and parse-back
+    can't disagree about a section that isn't there."""
+    sections = ["Summary", "Skills"]
+    if any(e.get("bullets") or e.get("employer") for e in content.get("experience", [])):
+        sections.append("Experience")
+    if any(p.get("bullets") for p in content.get("projects", [])):
+        sections.append("Projects")
+    return sections
+
+
 def render_resume_html(content: dict, contact_email: str, template_id: str = "ats_minimal") -> str:
     if template_id not in TEMPLATE_STYLES:
         raise ValueError("Unknown resume template")
     summary = _esc(content.get("summary", ""))
     skills = ", ".join(_esc(s) for s in content.get("skills", []))
+    sections = resume_sections(content)
 
     experience_html = ""
     for entry in content.get("experience", []):
@@ -73,6 +86,23 @@ def render_resume_html(content: dict, contact_email: str, template_id: str = "at
         </div>
         """
 
+    projects_html = ""
+    for project in content.get("projects", []):
+        if not project.get("bullets"):
+            continue
+        bullets = "".join(f"<li>{_esc(b)}</li>" for b in project["bullets"])
+        projects_html += f"""
+        <div class="entry">
+            <div class="entry-header"><span>{_esc(project.get('name', ''))}</span></div>
+            <ul>{bullets}</ul>
+        </div>
+        """
+
+    experience_section = (
+        f"<h2>Experience</h2>\n{experience_html}" if "Experience" in sections else ""
+    )
+    projects_section = f"<h2>Projects</h2>\n{projects_html}" if "Projects" in sections else ""
+
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>{_BASE_STYLE}{TEMPLATE_STYLES[template_id]}</style></head>
 <body>
@@ -85,8 +115,8 @@ def render_resume_html(content: dict, contact_email: str, template_id: str = "at
 <h2>Skills</h2>
 <p class="skills">{skills}</p>
 
-<h2>Experience</h2>
-{experience_html}
+{experience_section}
+{projects_section}
 </body></html>"""
 
 
