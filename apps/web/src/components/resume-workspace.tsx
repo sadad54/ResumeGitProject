@@ -95,10 +95,10 @@ function Workspace() {
   };
 
   /** Resolves with the new document's id, or rejects with a user-facing message. */
-  function waitForGeneration(jobId: string): Promise<string> {
+  function waitForGeneration(jobId: string, after: string): Promise<string> {
     stopWaiting.current?.();
     return new Promise((resolve, reject) => {
-      const source = openRunEvents(jobId);
+      const source = openRunEvents(jobId, after);
       const done = () => {
         clearTimeout(timer);
         source.close();
@@ -138,11 +138,13 @@ function Workspace() {
 
   const generate = useMutation({
     mutationFn: async () => {
-      await api.POST("/api/v1/jobs/{job_id}/generate", {
-        params: { path: { job_id: selectedJobId } },
-        body: { mode: "conservative", document_type: documentType },
-      });
-      return waitForGeneration(selectedJobId);
+      const accepted = unwrap(
+        await api.POST("/api/v1/jobs/{job_id}/generate", {
+          params: { path: { job_id: selectedJobId } },
+          body: { mode: "conservative", document_type: documentType },
+        }),
+      );
+      return waitForGeneration(selectedJobId, accepted.events_after);
     },
     onSuccess: (id) => open(id),
     onSettled: () => {

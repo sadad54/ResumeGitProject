@@ -865,6 +865,11 @@ export interface components {
         /** AnalyzeResponse */
         AnalyzeResponse: {
             /**
+             * Events After
+             * @default 0-0
+             */
+            events_after: string;
+            /**
              * Job Id
              * Format: uuid
              */
@@ -1174,6 +1179,11 @@ export interface components {
         };
         /** GenerateResponse */
         GenerateResponse: {
+            /**
+             * Events After
+             * @default 0-0
+             */
+            events_after: string;
             /** Generation Run Id */
             generation_run_id?: string | null;
             /**
@@ -1610,6 +1620,11 @@ export interface components {
         };
         /** SyncTriggerResponse */
         SyncTriggerResponse: {
+            /**
+             * Events After
+             * @default 0-0
+             */
+            events_after: string;
             /**
              * Run Id
              * Format: uuid
@@ -2153,8 +2168,13 @@ export interface operations {
     };
     stream_run_events_api_v1_events_runs__run_id__get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /** @description Replay events after this stream id (a trigger's events_after) */
+                after?: string | null;
+            };
+            header?: {
+                "Last-Event-ID"?: string | null;
+            };
             path: {
                 run_id: string;
             };

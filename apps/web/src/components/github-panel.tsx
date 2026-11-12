@@ -107,16 +107,16 @@ export function GitHubPanel() {
   const sync = useMutation({
     mutationFn: async (ids: string[]) =>
       unwrap(await api.POST("/api/v1/github/sync", { body: { repository_ids: ids } })),
-    onSuccess: ({ run_id }) => watch(run_id),
+    onSuccess: ({ run_id, events_after }) => watch(run_id, events_after),
   });
 
-  function watch(runId: string) {
+  function watch(runId: string, after: string) {
     closeStream.current?.();
     setRunning(true);
     let lineId = 0;
     const push = (text: string, tone?: ProgressLine["tone"]) =>
       setProgress((prev) => [...prev, { id: ++lineId, text, tone }]);
-    const source = openRunEvents(runId);
+    const source = openRunEvents(runId, after);
     const finish = () => {
       source.close();
       closeStream.current = null;

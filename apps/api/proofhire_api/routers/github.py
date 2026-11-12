@@ -224,9 +224,14 @@ async def trigger_sync(
     await db.commit()
     await db.refresh(sync_run)
 
+    from proofhire_api.routers.events import stream_position
+
+    events_after = await stream_position(sync_run.id)
     sync_repositories.send(str(sync_run.id), repo_ids)
 
-    return SyncTriggerResponse(run_id=sync_run.id, status=sync_run.status)
+    return SyncTriggerResponse(
+        run_id=sync_run.id, status=sync_run.status, events_after=events_after
+    )
 
 
 @router.get("/sync/{run_id}", response_model=SyncStatusResponse)

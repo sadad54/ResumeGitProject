@@ -90,12 +90,15 @@ class Step:
         print(f"    {self.name}: {seconds}s", flush=True)
 
 
-def sse_events(client: httpx.Client, run_id: str, until: set[str], timeout: float):
+def sse_events(
+    client: httpx.Client, run_id: str, until: set[str], timeout: float, after: str | None = None
+):
     """Yield (event, data) from the run's SSE stream until a terminal event."""
     deadline = time.monotonic() + timeout
     with client.stream(
         "GET",
         f"/api/v1/events/runs/{run_id}",
+        params={"after": after} if after else None,
         headers={"Accept": "text/event-stream"},
         timeout=httpx.Timeout(timeout, read=60.0),
     ) as response:
@@ -285,7 +288,11 @@ def main() -> None:
             events = Counter()
             per_repo: dict = {}
             for event, data in sse_events(
-                client, run["run_id"], {"github.sync.completed", "github.sync.failed"}, 900
+                client,
+                run["run_id"],
+                {"github.sync.completed", "github.sync.failed"},
+                900,
+                after=run["events_after"],
             ):
                 events[event] += 1
                 if event == "github.repo.completed":
@@ -360,13 +367,21 @@ def main() -> None:
             }
 
         with Step(report, "generate_resume"):
-            client.post(
-                f"/api/v1/jobs/{job['id']}/generate",
-                json={"mode": "conservative", "document_type": "resume"},
-            ).raise_for_status()
+            accepted = (
+                client.post(
+                    f"/api/v1/jobs/{job['id']}/generate",
+                    json={"mode": "conservative", "document_type": "resume"},
+                )
+                .raise_for_status()
+                .json()
+            )
             result: dict = {}
             for event, data in sse_events(
-                client, job["id"], {"generation.completed", "generation.failed"}, 1800
+                client,
+                job["id"],
+                {"generation.completed", "generation.failed"},
+                1800,
+                after=accepted["events_after"],
             ):
                 if event.startswith("generation."):
                     print(f"    {event}", flush=True)

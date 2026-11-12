@@ -3,6 +3,11 @@
     "schemas": {
       "AnalyzeResponse": {
         "properties": {
+          "events_after": {
+            "default": "0-0",
+            "title": "Events After",
+            "type": "string"
+          },
           "job_id": {
             "format": "uuid",
             "title": "Job Id",
@@ -723,6 +728,11 @@
       },
       "GenerateResponse": {
         "properties": {
+          "events_after": {
+            "default": "0-0",
+            "title": "Events After",
+            "type": "string"
+          },
           "generation_run_id": {
             "anyOf": [
               {
@@ -1923,6 +1933,11 @@
       },
       "SyncTriggerResponse": {
         "properties": {
+          "events_after": {
+            "default": "0-0",
+            "title": "Events After",
+            "type": "string"
+          },
           "run_id": {
             "format": "uuid",
             "title": "Run Id",
@@ -2823,6 +2838,40 @@
               "format": "uuid",
               "title": "Run Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Replay events after this stream id (a trigger's events_after)",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Replay events after this stream id (a trigger's events_after)",
+              "title": "After"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
             }
           }
         ],

@@ -154,8 +154,11 @@ async def analyze_job_endpoint(
     if job is None or job.user_id != current_user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
 
+    from proofhire_api.routers.events import stream_position
+
+    events_after = await stream_position(job.id)
     if job.status in {"analyzing", "matching"}:
-        return AnalyzeResponse(job_id=job.id, status="queued")
+        return AnalyzeResponse(job_id=job.id, status="queued", events_after=events_after)
 
     from proofhire_worker.broker import broker  # noqa: F401  (configures the Redis broker)
     from proofhire_worker.intelligence.job_analysis import analyze_job
@@ -164,7 +167,7 @@ async def analyze_job_endpoint(
     await db.commit()
     analyze_job.send(str(job.id))
 
-    return AnalyzeResponse(job_id=job.id, status="queued")
+    return AnalyzeResponse(job_id=job.id, status="queued", events_after=events_after)
 
 
 @router.get("/{job_id}/requirements", response_model=list[RequirementPublic])

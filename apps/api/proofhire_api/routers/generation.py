@@ -87,9 +87,12 @@ async def trigger_generate(
     from proofhire_worker.broker import broker  # noqa: F401  (configures the Redis broker)
     from proofhire_worker.intelligence.generation import generate_document
 
+    from proofhire_api.routers.events import stream_position
+
+    events_after = await stream_position(job.id)
     generate_document.send(str(job.id), body.mode.value, body.document_type.value)
 
-    return GenerateResponse(status="queued")
+    return GenerateResponse(status="queued", events_after=events_after)
 
 
 @router.get("/generation-runs/{run_id}", response_model=GenerationRunPublic)

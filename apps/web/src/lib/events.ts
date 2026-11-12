@@ -10,15 +10,21 @@ import { apiBaseUrl, authFetch } from "./api";
  *
  * Returns an EventTarget that dispatches one MessageEvent per SSE frame,
  * named by the frame's `event:` field, plus "error" if the stream fails.
+ *
+ * `after` is the `events_after` a trigger request returned: the server
+ * replays every event of that run from there, so one published before this
+ * connection opened (a run failing in milliseconds) still arrives.
  */
-export function openRunEvents(runId: string) {
+export function openRunEvents(runId: string, after?: string) {
   const events = new EventTarget();
   const controller = new AbortController();
   const source = Object.assign(events, { close: () => controller.abort() });
   void (async () => {
     try {
       const response = await authFetch(
-        `${apiBaseUrl()}/api/v1/events/runs/${encodeURIComponent(runId)}`,
+        `${apiBaseUrl()}/api/v1/events/runs/${encodeURIComponent(runId)}${
+          after ? `?after=${encodeURIComponent(after)}` : ""
+        }`,
         { headers: { Accept: "text/event-stream" }, signal: controller.signal },
       );
       if (!response.ok || !response.body) throw new Error("Could not open progress stream");

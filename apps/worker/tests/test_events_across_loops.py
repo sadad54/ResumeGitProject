@@ -9,26 +9,21 @@ import uuid
 
 import redis
 from proofhire_contracts import RunEventName
+from proofhire_contracts.run_events import run_stream_key
 
-from proofhire_worker.events import channel_name, publish_event
+from proofhire_worker.events import publish_event
 
 
-def test_publishing_from_successive_event_loops_delivers_every_event():
+def test_publishing_from_successive_event_loops_appends_every_event():
     run_id = str(uuid.uuid4())
-    subscriber = redis.Redis.from_url("redis://localhost:6379/0")
-    pubsub = subscriber.pubsub()
-    pubsub.subscribe(channel_name(run_id))
-    pubsub.get_message(timeout=1)  # subscription confirmation
-
     for n in range(3):  # three "tasks", three loops
         asyncio.run(publish_event(run_id, RunEventName.EVIDENCE_CREATED, {"n": n}))
 
-    received = []
-    for _ in range(3):
-        message = pubsub.get_message(timeout=2)
-        while message and message["type"] != "message":
-            message = pubsub.get_message(timeout=2)
-        assert message is not None, f"only {len(received)} of 3 events arrived"
-        received.append(json.loads(message["data"])["data"]["n"])
-    pubsub.close()
-    assert received == [0, 1, 2]
+    client = redis.Redis.from_url("redis://localhost:6379/0", decode_responses=True)
+    key = run_stream_key(run_id)
+    try:
+        entries = client.xrange(key)
+        assert [json.loads(f["payload"])["data"]["n"] for _id, f in entries] == [0, 1, 2]
+        assert 0 < client.ttl(key) <= 24 * 3600, "streams must expire, not accumulate"
+    finally:
+        client.delete(key)

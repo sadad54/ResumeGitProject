@@ -26,6 +26,10 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     generation_run_id: uuid.UUID | None = None
     status: str = "queued"
+    # Stream position before this work was queued: pass it as `after` to
+    # GET /api/v1/events/runs/{id} to receive every event of this run and
+    # none from earlier ones (routers/events.py).
+    events_after: str = "0-0"
 
 
 class GenerationRunPublic(BaseModel):
