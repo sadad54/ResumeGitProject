@@ -29,13 +29,13 @@ from proofhire_contracts import (
     RunEventName,
     TailoringMode,
 )
-from proofhire_prompts.claim_verify_v1 import (
+from proofhire_prompts.claim_verify_v2 import (
     PROMPT_VERSION as CLAIM_VERIFY_VERSION,
 )
-from proofhire_prompts.claim_verify_v1 import (
+from proofhire_prompts.claim_verify_v2 import (
     SYSTEM_PROMPT as CLAIM_VERIFY_SYSTEM,
 )
-from proofhire_prompts.claim_verify_v1 import (
+from proofhire_prompts.claim_verify_v2 import (
     build_user_message as build_claim_verify_message,
 )
 from proofhire_prompts.cover_letter_write_v1 import (
@@ -427,6 +427,8 @@ async def _generate(job_id_str: str, mode_str: str, document_type_str: str) -> N
         job = await session.get(Job, job_id)
         if job is None:
             logger.error("job_not_found", extra={"job_id": job_id_str})
+            # Still a terminal event: a waiting client shouldn't sit out its timeout.
+            await publish_event(job_id_str, RunEventName.GENERATION_FAILED, {"job_id": job_id_str})
             return
 
         generation_run = GenerationRun(

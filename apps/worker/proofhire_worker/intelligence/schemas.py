@@ -139,12 +139,14 @@ class ClaimOutput(BaseModel):
     bullet_index: int = Field(description="Index into the bullets list this claim was extracted from")
     claim_text: str = Field(description="The atomic factual claim, as it appears in the document")
     claim_type: str = Field(
-        description="One of: employment, education, certification, award, metric, skill, other"
+        description="One of: employment, education, certification, award, metric, technology, "
+        "scope, skill, other"
     )
     asserted_value: str = Field(
         default="",
-        description="For employment/education/certification/award/metric claims: the exact value being "
-        "asserted (e.g. employer name, date, percentage). Empty for skill/other claims.",
+        description="For employment/education/certification/award/metric/technology claims: the "
+        "single value asserted, exactly as written (one employer, one title, one date, one "
+        "number, one technology name). Empty for scope/skill/other claims.",
     )
     referenced_profile_fact_id: str | None = None
     referenced_evidence_id: str | None = None
