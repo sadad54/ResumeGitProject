@@ -6,14 +6,14 @@
 |---|---|---|
 | Frontend | Vercel (hobby) | https://proofhire-beta.vercel.app — project `proofhire`, root directory `apps/web` |
 | Postgres + pgvector | Supabase (free) | project `proofhire` (`ltpuaecgvcxmepexwofb`, ap-southeast-1); app role `proofhire`, IPv4 session pooler |
-| API + worker + Redis | Hugging Face Docker Space (free CPU) | one container from `infra/docker/Dockerfile.space`, deployed by `deploy_space.py` |
+| API + worker + Redis | Oracle Cloud Always Free VM (Ampere A1, arm64) | one container from `infra/docker/Dockerfile.space` behind Caddy (Let's Encrypt on `<ip>.sslip.io`), deployed by `deploy_vm.py` |
 | LLM | Groq (free tier) | gpt-oss-120b / gpt-oss-20b; limits per model: 30 req/min, 1,000 req/day, 8K tokens/min, 200K tokens/day |
 | Embeddings | inside the container | bge-small-en-v1.5 (ONNX, CPU), baked into the image — no key, no cost (ADR-0018) |
 
 Deliberate differences from the separated layout in `OPERATIONS.md`:
 
 - Redis runs inside the container and is ephemeral: rate-limit counters, the
-  revoked-token denylist and queued jobs are lost when the Space restarts or
+  revoked-token denylist and queued jobs are lost when the container restarts or
   sleeps. Postgres is external and durable.
 - Rendered PDFs live on container disk unless `STORAGE_BACKEND=s3` (any
   S3-compatible store; see `.env.example`). A vanished export answers 410 and
@@ -28,53 +28,56 @@ Deliberate differences from the separated layout in `OPERATIONS.md`:
 
 ## Going live: the steps only you can do, in order
 
-Everything else is scripted. Run the Python steps from the project's own
-environment (the WSL venv used for development), because the deploy
-preflight imports the API's configuration checks.
+Hugging Face stopped hosting Docker Spaces on the free CPU tier (the deploy
+got `402 Payment Required` on 2026-11-28), so the backend runs on an Oracle
+Cloud Always Free VM instead. `deploy_space.py` is kept for anyone with a PRO
+account; `deploy_vm.py` reuses its environment assembly and preflight.
 
-1. **Rotate the Groq key** (console.groq.com → API Keys): the current one has
-   appeared in a chat transcript. Put the new one in `.env` as `GROQ_API_KEY`.
-2. **Restore the Supabase project** if it's paused (dashboard → Restore). Free
-   projects pause after 7 idle days; step 10 keeps it awake from then on.
-3. **Fix `.env.production`**: line 8 still says `LLM_DEFAULT_PROVIDER=anthropic`
-   and there is no Anthropic key, so the preflight refuses to deploy. Change it
-   to `groq` (or pass `--provider groq` to the deploy script).
-4. **Push the branch and open the PR.** CI's `space-image` job builds the exact
-   image the Space will build, boots it against Postgres with production
-   settings and smoke-tests it (`infra/docker/smoke_space.py`). Merge when green;
-   Vercel deploys `master` automatically.
-5. **Log in** to the two services the script talks to: `hf auth login` (a token
-   with *write* scope) and `vercel login`.
-6. **Dry run**, which assembles the production environment and runs every
-   preflight check but uploads nothing:
+1. **Oracle account** at cloud.oracle.com (Always Free). It asks for a card to
+   verify identity; Always Free resources are not charged. Pick a home region
+   close to Supabase (ap-southeast-1 → Singapore); it can't be changed later.
+2. **Create the VM**: Compute → Instances → Create. Image *Canonical Ubuntu
+   24.04*, shape *VM.Standard.A1.Flex* with 2 OCPU / 12 GB (inside the free
+   4 / 24; a smaller shape also helps with "out of host capacity" errors —
+   retry later or pick another availability domain if you hit one). Keep
+   "assign a public IPv4 address" on and **download the generated private
+   key** (e.g. to `C:\Users\<you>\.ssh\proofhire-oracle.key`).
+3. **Open ports 80 and 443**: the instance's subnet → Security List → Add
+   Ingress Rules: source `0.0.0.0/0`, TCP, destination ports `80,443`.
+   (The bootstrap script opens them in the VM's own firewall too.)
+4. **Merge the PR** once CI is green, so `master` has what the VM builds.
+5. **Dry run** (repo root, in the project's Python 3.13 venv):
    ```bash
-   python infra/deployment/deploy_space.py --space <hf-username>/proofhire --dry-run
+   python infra/deployment/deploy_vm.py --host <public-ip> --dry-run
    ```
-   It must print `preflight: configuration ok` and `preflight: models ok`.
-7. **Deploy**, which also points the frontend at the Space and rebuilds it:
+6. **Deploy**, which also points the frontend at the VM and rebuilds it:
    ```bash
-   python infra/deployment/deploy_space.py --space <hf-username>/proofhire --vercel
+   python infra/deployment/deploy_vm.py --host <public-ip> --key <path-to-key> --vercel
    ```
-8. **GitHub OAuth app** (github.com → Settings → Developer settings → OAuth
-   Apps → the ProofHire app): add the callback URL the script prints,
-   `https://<hf-username>-proofhire.hf.space/api/v1/github/callback`.
-9. **Verify** once the Space has built (a few minutes; watch its logs page):
+   The first run installs Docker and builds the image on the VM (~10 minutes
+   on 2 OCPU); later runs rebuild only changed layers.
+7. **GitHub OAuth app**: add the callback URL the script prints,
+   `https://<ip-with-dashes>.sslip.io/api/v1/github/callback`.
+8. **Verify**:
    ```bash
-   curl https://<hf-username>-proofhire.hf.space/ready
-   python infra/docker/smoke_space.py --api https://<hf-username>-proofhire.hf.space
+   curl https://<ip-with-dashes>.sslip.io/ready
+   python infra/docker/smoke_space.py --api https://<ip-with-dashes>.sslip.io
    ```
-   Then sign up on the Vercel site, connect GitHub and sync a repository.
-10. **Keep it awake** (optional): add a repository variable
-    `PROOFHIRE_API_URL=https://<hf-username>-proofhire.hf.space` (Settings →
-    Secrets and variables → Actions → Variables). `.github/workflows/keepalive.yml`
-    then pings `/ready` daily, which wakes the Space and keeps Supabase active.
-11. **Seed the demo account** (optional, recruiter-facing): see below.
+9. **Keep Supabase awake** (optional): repository variable
+   `PROOFHIRE_API_URL=https://<ip-with-dashes>.sslip.io`; the keep-alive
+   workflow pings `/ready` daily so the free database never idles into a pause.
+10. **Seed the demo account** (optional, recruiter-facing): see below.
+
+Oracle may reclaim Always Free instances that sit idle for 7 days (very low
+CPU, network and memory use). The daily keep-alive keeps this one active in
+practice; if the VM is ever reclaimed, steps 2, 3 and 6 rebuild it.
 
 ## Redeploying
 
-Re-run step 7. The preflight runs every time; the script also deletes Space
-variables it manages but no longer sets (the previous version pinned
-`LLM_MODEL_DEFAULT` to a model Groq has since retired). The container applies
+Re-run step 6 (add `--ref <branch>` to deploy something other than `master`).
+The preflight runs every time, and the VM's environment file is rewritten
+from scratch, so a variable removed from `.env.production` is gone on the
+next deploy. The data volume and the TLS certificate survive. The container applies
 migrations, probes the configured models and re-embeds any evidence embedded
 by a different model on start.
 

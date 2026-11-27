@@ -107,7 +107,13 @@ jobs:
   # on every PR: this is where a broken entrypoint, a missing system library
   # for Chromium or an un-baked model would otherwise first show up — in prod.
   space-image:
-    runs-on: ubuntu-latest
+    # The production VM (Oracle Always Free, Ampere A1) is arm64, so the image
+    # is built and smoke-tested natively on both architectures.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     services:
       postgres:
         image: pgvector/pgvector:pg16
