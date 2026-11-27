@@ -36,7 +36,7 @@ exists. Anything cut goes in **Known gaps** with the reason.
 - [x] B2 Object storage (F10) — `9258292`: local + S3 (moto-tested), owner-scoped keys, signed URLs, 410 self-healing, purge-on-delete, no path leakage; ADR-0016 gap closed
 - [x] B3 Real embeddings without an API key (F5) — `f859603`, `f3d3968`; ADR-0018
 - [x] B4 Groq model defaults + `check_models --probe` (F4) — `f859603`, `1058b40` (verifier moved off qwen after Groq capped it at 1K output tokens/min mid-session; probe verified live against that config)
-- [ ] B5 SSE: verify the late-subscriber race; if real, replay via Redis Streams
+- [x] B5 SSE late-subscriber race: real; events moved to per-run Redis streams with replay from `events_after` / `Last-Event-ID` — `0768c07`, `test_run_events.py`
 - [x] B6 Documents ordering, claims N+1 (`9258292`); `is_demo`, overview endpoint (`2aefb77`) (F11)
 - [x] B7 Real end-to-end run on Groq — `scripts/e2e_live.py`, `docs/product/metrics/e2e-live.json`. First attempt found 8 bugs (`1058b40`); second found 0 resume bullets without an uploaded resume (Projects section, `resume_write:v2`) and an export failure on U+2011 hyphens (parse-back normalization + ATS-safe text)
 
@@ -57,10 +57,10 @@ exists. Anything cut goes in **Known gaps** with the reason.
 ## Phase E — AI evaluation with real labels
 - [x] E1 `apps/worker/scripts/eval_skill_retrieval.py` on 926 human-labelled job-ad sentences (TechWolf/SkillSpan, ESCO): found the AND lexical query dead (908/926 no results); OR semantics shipped (ΔMRR +0.022 [+0.007, +0.037]); RRF rejected (−0.061); ADR-0006 updated
 - [ ] E2 JD requirement extraction vs human skill annotations (strict + relaxed P/R/F1) on 100+ postings via Groq
-- [ ] E3 Verifier catch rate on injected hallucination traps; unsupported-claim rate; latency/tokens per run
+- [~] E3 Verifier catch rate on planted traps — v1 measured (`verifier-eval-v1.json`, 160 bullets, Groq gpt-oss-120b): trap catch 33.8% [24.3, 44.6], false positives 23.7% [15.8, 34.1]; technology traps 0/20, scope traps 1/20, and 19/20 *true* employment claims wrongly flagged. `cdeb354` adds the technology exact-match guard and `claim_verify:v2`. **Still to do:** re-run `eval_verifier.py` on v2, fix the employment false positives, commit `verifier-eval-v2.json`
 
 ## Phase F — load testing
-- [ ] F1 10/50/100/250 concurrent users; p95, failure rate; bottleneck found, fixed, re-measured
+- [~] F1 `apps/api/scripts/load_test.py` written (`233846d`), query benchmark refreshed. **Not run yet** — no results file. Needs the local Postgres + Redis stack, which is gone from this machine (WSL distro and Docker both absent as of 2026-11-28)
 
 ## Phase G — consolidate
 - [ ] G1 BUILD_STATUS + CHECKLIST_STATUS corrected (incl. the false TanStack claim)
