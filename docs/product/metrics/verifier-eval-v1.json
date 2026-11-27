@@ -1,0 +1,1926 @@
+{
+  "generated_at": "2026-09-28T02:12:07.153856+00:00",
+  "provider": "groq",
+  "verifier_model": "openai/gpt-oss-120b",
+  "extraction_model": "openai/gpt-oss-20b",
+  "evidence_items": 13,
+  "documents": 20,
+  "bullets": 160,
+  "seed": 20260928,
+  "summary": {
+    "trap_catch_rate": 0.338,
+    "trap_catch_ci95": [
+      0.243,
+      0.446
+    ],
+    "trap_catch_rate_llm_only": 0.2,
+    "false_positive_rate": 0.237,
+    "false_positive_ci95": [
+      0.158,
+      0.341
+    ],
+    "false_positive_rate_llm_only": 0.0
+  },
+  "by_kind": {
+    "trap_employment": {
+      "n": 20,
+      "caught_rate": 0.7,
+      "caught_ci95": [
+        0.481,
+        0.855
+      ],
+      "caught_rate_llm_only": 0.45,
+      "no_claim_extracted": 0
+    },
+    "trap_metric": {
+      "n": 20,
+      "caught_rate": 0.6,
+      "caught_ci95": [
+        0.387,
+        0.781
+      ],
+      "caught_rate_llm_only": 0.35,
+      "no_claim_extracted": 0
+    },
+    "trap_scope": {
+      "n": 20,
+      "caught_rate": 0.05,
+      "caught_ci95": [
+        0.009,
+        0.236
+      ],
+      "caught_rate_llm_only": 0.0,
+      "no_claim_extracted": 0
+    },
+    "trap_technology": {
+      "n": 20,
+      "caught_rate": 0.0,
+      "caught_ci95": [
+        0.0,
+        0.161
+      ],
+      "caught_rate_llm_only": 0.0,
+      "no_claim_extracted": 0
+    },
+    "true_employment": {
+      "n": 20,
+      "caught_rate": 0.95,
+      "caught_ci95": [
+        0.764,
+        0.991
+      ],
+      "caught_rate_llm_only": 0.0,
+      "no_claim_extracted": 0
+    },
+    "true_evidence": {
+      "n": 60,
+      "caught_rate": 0.0,
+      "caught_ci95": [
+        0.0,
+        0.06
+      ],
+      "caught_rate_llm_only": 0.0,
+      "no_claim_extracted": 0
+    }
+  },
+  "tokens": {
+    "input": 61032,
+    "output": 58394,
+    "calls": 20
+  },
+  "verify_latency_ms_mean": 39321,
+  "seconds": 830.7,
+  "environment": {
+    "python": "3.14.4"
+  },
+  "evidence": [
+    {
+      "title": "Dual backend object storage",
+      "normalized_claim": "The application supports both local filesystem and S3-compatible object storage for exported documents.",
+      "description": "The ObjectStorage protocol defines a common interface, and the implementation includes a LocalStorage class that stores files under a configurable root and a S3 backend (implied by the comment). Keys are backend\u2011independent and validated to prevent path traversal."
+    },
+    {
+      "title": "Deterministic signed URLs for downloads",
+      "normalized_claim": "Downloads are served via signed URLs that expire after a configurable TTL.",
+      "description": "The LocalStorage implementation generates HMAC signatures using a derived signing key and includes the key, expiration, and filename in the signature. The API endpoint `/api/v1/files/{key}` serves the file directly after verifying the signature."
+    },
+    {
+      "title": "Key validation logic",
+      "normalized_claim": "The system validates storage keys against a regex and disallows traversal or empty segments.",
+      "description": "The `validate_key` function checks the key against a compiled regex and rejects keys containing '..', '//' or failing the pattern, raising `InvalidKey`."
+    },
+    {
+      "title": "Evidence repository DTO boundary",
+      "normalized_claim": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "description": "`EvidenceRepository` defines `EvidenceCandidate`, `EvidenceHit`, and `EvidenceQuery` dataclasses, and the worker imports these instead of SQLAlchemy models, ensuring the worker does not depend on ORM internals."
+    },
+    {
+      "title": "Hybrid search configuration constants",
+      "normalized_claim": "The repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "description": "Constants such as `LEXICAL_WEIGHT`, `VECTOR_WEIGHT`, `SKILL_WEIGHT`, and `CANDIDATES_PER_SIGNAL` are declared at module level and referenced in queries."
+    },
+    {
+      "title": "Coverage computation actor",
+      "normalized_claim": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions.",
+      "description": "The `compute_coverage` function is a Dramatiq actor that schedules `_compute_coverage`, which opens an async SQLAlchemy session, loads a job, deletes old evidence matches, and performs hybrid search via the evidence repository."
+    },
+    {
+      "title": "Cancellation handling in coverage loop",
+      "normalized_claim": "The coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "description": "Inside `_compute_coverage`, before each requirement is processed, `is_cancelled(job_id_str)` is awaited; if true, the job status is set to cancelled, the session is committed, and the cancellation flag is cleared."
+    },
+    {
+      "title": "LLM reranking integration",
+      "normalized_claim": "The coverage computation uses an LLM provider to rerank evidence hits.",
+      "description": "The code imports `get_provider`, `get_embedding_provider`, and `config_for(\"rerank\")`, and later calls `evidence_repo.hybrid_search` and passes results to an LLM rerank prompt (implied by imports of `PROMPT_VERSION`, `SYSTEM_PROMPT`, `build_user_message`)."
+    },
+    {
+      "title": "Local ONNX embedding provider",
+      "normalized_claim": "The project implements a local embedding provider using ONNX Runtime via fastembed",
+      "description": "The `LocalEmbeddingProvider` class loads a BAAI/bge-small-en-v1.5 model with fastembed, caches the session per process, and applies a query instruction for BGE models. It exposes an async `embed` method that returns float vectors of dimension `EMBEDDING_DIMENSION`."
+    },
+    {
+      "title": "Retry logic with exponential backoff and jitter",
+      "normalized_claim": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter",
+      "description": "The `with_retries` function in `retry.py` accepts an async operation, a retryable predicate, and retries up to `MAX_ATTEMPTS` with backoff calculated by `_backoff_delay`. It honors server-provided `Retry-After` headers and logs each retry attempt."
+    },
+    {
+      "title": "Groq provider using OpenAI SDK with structured JSON output",
+      "normalized_claim": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation",
+      "description": "`GroqProvider` constructs an `AsyncOpenAI` client pointing at `https://api.groq.com/openai/v1`. Its `structured_generate` method builds a system prompt that includes a JSON schema, sends the request, and expects a strictly validated JSON response. It also defines retryable error logic specific to Groq\u2019s rate\u2011limit behavior."
+    },
+    {
+      "title": "Async FastAPI authentication API",
+      "normalized_claim": "The repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "description": "The auth router defines endpoints for signup, login, token refresh, logout, and user info, all using FastAPI\u2019s async capabilities and an AsyncSession from SQLAlchemy. Passwords are hashed with a dedicated hash_password function, and access/refresh tokens are created and validated via JWT utilities. Token revocation is handled through a revocation backend, ensuring refresh tokens cannot be replayed."
+    },
+    {
+      "title": "GitHub repository sync actor",
+      "normalized_claim": "The repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "description": "The sync.py module defines an async function that runs as a Dramatiq actor. It fetches the default branch SHA, retrieves the repository tree, classifies each file, limits P2 priority files to 60, scans file contents for secrets, computes SHA-256 hashes, and compares against existing SourceArtifact records to perform idempotent updates. Events are published via a publish_event helper and telemetry is traced with traced_stage."
+    }
+  ],
+  "rows": [
+    {
+      "document": 0,
+      "kind": "trap_technology",
+      "text": "Downloads are served via signed URLs that expire after a configurable TTL, deployed on GraphQL.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 0,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the application supports both local filesystem and S3-compatible object storage for exported documents.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 0,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 0,
+      "kind": "trap_metric",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 0,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 0,
+      "kind": "true_evidence",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 0,
+      "kind": "true_evidence",
+      "text": "The project implements a local embedding provider using ONNX Runtime via fastembed",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 0,
+      "kind": "true_evidence",
+      "text": "The repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 1,
+      "kind": "true_evidence",
+      "text": "The coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 1,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 1,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 1,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 1,
+      "kind": "trap_metric",
+      "text": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 1,
+      "kind": "true_evidence",
+      "text": "The repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 1,
+      "kind": "trap_technology",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter, deployed on Kubernetes.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 1,
+      "kind": "true_evidence",
+      "text": "The application supports both local filesystem and S3-compatible object storage for exported documents.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 2,
+      "kind": "trap_technology",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation, deployed on Terraform.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 2,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 2,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 2,
+      "kind": "true_evidence",
+      "text": "The repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 2,
+      "kind": "trap_metric",
+      "text": "The system validates storage keys against a regex and disallows traversal or empty segments, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 2,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 2,
+      "kind": "true_evidence",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 2,
+      "kind": "true_evidence",
+      "text": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 3,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the project implements a local embedding provider using ONNX Runtime via fastembed.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 3,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 3,
+      "kind": "trap_metric",
+      "text": "The repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 3,
+      "kind": "true_evidence",
+      "text": "The coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 3,
+      "kind": "true_evidence",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 3,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 3,
+      "kind": "true_evidence",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 3,
+      "kind": "trap_technology",
+      "text": "The repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management, deployed on Terraform.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 4,
+      "kind": "true_evidence",
+      "text": "The project implements a local embedding provider using ONNX Runtime via fastembed",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 4,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 4,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 4,
+      "kind": "trap_metric",
+      "text": "The repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 4,
+      "kind": "true_evidence",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 4,
+      "kind": "true_evidence",
+      "text": "Downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 4,
+      "kind": "trap_technology",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models, deployed on Apache Kafka.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 4,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 5,
+      "kind": "trap_technology",
+      "text": "The coverage loop checks for cancellation before each LLM call and aborts if requested, deployed on Elasticsearch.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 5,
+      "kind": "true_evidence",
+      "text": "The repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 5,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 5,
+      "kind": "trap_metric",
+      "text": "The project implements a local embedding provider using ONNX Runtime via fastembed, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 5,
+      "kind": "true_evidence",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 5,
+      "kind": "true_evidence",
+      "text": "The coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 5,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the system validates storage keys against a regex and disallows traversal or empty segments.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 5,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 6,
+      "kind": "true_evidence",
+      "text": "The coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 6,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the project implements a local embedding provider using ONNX Runtime via fastembed.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 6,
+      "kind": "true_evidence",
+      "text": "Downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 6,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 6,
+      "kind": "trap_metric",
+      "text": "The repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 6,
+      "kind": "trap_technology",
+      "text": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions, deployed on GraphQL.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 6,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 6,
+      "kind": "true_evidence",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 7,
+      "kind": "trap_technology",
+      "text": "The system validates storage keys against a regex and disallows traversal or empty segments, deployed on Elasticsearch.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 7,
+      "kind": "true_evidence",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 7,
+      "kind": "true_evidence",
+      "text": "Downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 7,
+      "kind": "true_evidence",
+      "text": "The repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 7,
+      "kind": "trap_metric",
+      "text": "The coverage loop checks for cancellation before each LLM call and aborts if requested, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 7,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 7,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 7,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the application supports both local filesystem and S3-compatible object storage for exported documents.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 8,
+      "kind": "true_evidence",
+      "text": "The repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 8,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 8,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the project implements a local embedding provider using ONNX Runtime via fastembed.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 8,
+      "kind": "true_evidence",
+      "text": "The repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 8,
+      "kind": "true_evidence",
+      "text": "The coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 8,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 8,
+      "kind": "trap_metric",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 8,
+      "kind": "trap_technology",
+      "text": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions, deployed on Elasticsearch.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 9,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 9,
+      "kind": "trap_metric",
+      "text": "The application supports both local filesystem and S3-compatible object storage for exported documents, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 9,
+      "kind": "true_evidence",
+      "text": "The system validates storage keys against a regex and disallows traversal or empty segments.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 9,
+      "kind": "trap_technology",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models, deployed on Apache Kafka.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 9,
+      "kind": "true_evidence",
+      "text": "The repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 9,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 9,
+      "kind": "true_evidence",
+      "text": "The project implements a local embedding provider using ONNX Runtime via fastembed",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 9,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 10,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the project implements a local embedding provider using ONNX Runtime via fastembed.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 10,
+      "kind": "true_evidence",
+      "text": "The system validates storage keys against a regex and disallows traversal or empty segments.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 10,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 10,
+      "kind": "trap_technology",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter, deployed on Apache Spark.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 10,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 10,
+      "kind": "true_evidence",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 10,
+      "kind": "trap_metric",
+      "text": "The repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 10,
+      "kind": "true_evidence",
+      "text": "The repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 11,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 11,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 11,
+      "kind": "trap_technology",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation, deployed on Apache Kafka.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 11,
+      "kind": "true_evidence",
+      "text": "The application supports both local filesystem and S3-compatible object storage for exported documents.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 11,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the system validates storage keys against a regex and disallows traversal or empty segments.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 11,
+      "kind": "trap_metric",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 11,
+      "kind": "true_evidence",
+      "text": "The project implements a local embedding provider using ONNX Runtime via fastembed",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 11,
+      "kind": "true_evidence",
+      "text": "The repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 12,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the project implements a local embedding provider using ONNX Runtime via fastembed.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 12,
+      "kind": "trap_technology",
+      "text": "The repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database, deployed on Apache Kafka.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 12,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 12,
+      "kind": "true_evidence",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 12,
+      "kind": "true_evidence",
+      "text": "The application supports both local filesystem and S3-compatible object storage for exported documents.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 12,
+      "kind": "true_evidence",
+      "text": "The repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 12,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 12,
+      "kind": "trap_metric",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 13,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 13,
+      "kind": "trap_technology",
+      "text": "The repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database, deployed on Terraform.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 13,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 13,
+      "kind": "true_evidence",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 13,
+      "kind": "trap_metric",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 13,
+      "kind": "true_evidence",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 13,
+      "kind": "true_evidence",
+      "text": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 13,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 14,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 14,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the system validates storage keys against a regex and disallows traversal or empty segments.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 14,
+      "kind": "true_evidence",
+      "text": "The repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 14,
+      "kind": "trap_technology",
+      "text": "The coverage computation uses an LLM provider to rerank evidence hits, deployed on Apache Kafka.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 14,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the application supports both local filesystem and S3-compatible object storage for exported documents.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 14,
+      "kind": "trap_metric",
+      "text": "The project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 14,
+      "kind": "true_evidence",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 14,
+      "kind": "true_evidence",
+      "text": "The coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 15,
+      "kind": "true_evidence",
+      "text": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 15,
+      "kind": "trap_technology",
+      "text": "The project implements a local embedding provider using ONNX Runtime via fastembed, deployed on Apache Kafka.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 15,
+      "kind": "true_evidence",
+      "text": "The system validates storage keys against a regex and disallows traversal or empty segments.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 15,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 15,
+      "kind": "trap_metric",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 15,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 15,
+      "kind": "true_evidence",
+      "text": "The repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 15,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 16,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the system validates storage keys against a regex and disallows traversal or empty segments.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 16,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 16,
+      "kind": "true_evidence",
+      "text": "The coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 16,
+      "kind": "trap_metric",
+      "text": "The application supports both local filesystem and S3-compatible object storage for exported documents, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 16,
+      "kind": "trap_technology",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter, deployed on Terraform.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 16,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 16,
+      "kind": "true_evidence",
+      "text": "Downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 16,
+      "kind": "true_evidence",
+      "text": "The coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 17,
+      "kind": "true_evidence",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 17,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the project implements a Groq LLM provider that uses the OpenAI Python SDK to send requests to Groq\u2019s API and enforces strict JSON schema validation.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 17,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 17,
+      "kind": "trap_metric",
+      "text": "The repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 17,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 17,
+      "kind": "true_evidence",
+      "text": "The application supports both local filesystem and S3-compatible object storage for exported documents.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 17,
+      "kind": "trap_technology",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter, deployed on Elasticsearch.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 17,
+      "kind": "true_evidence",
+      "text": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 18,
+      "kind": "trap_technology",
+      "text": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions, deployed on GraphQL.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 18,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the application supports both local filesystem and S3-compatible object storage for exported documents.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 18,
+      "kind": "true_evidence",
+      "text": "The coverage loop checks for cancellation before each LLM call and aborts if requested.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 18,
+      "kind": "true_evidence",
+      "text": "The coverage computation uses an LLM provider to rerank evidence hits.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 18,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, the worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 18,
+      "kind": "true_evidence",
+      "text": "The repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 18,
+      "kind": "trap_metric",
+      "text": "The project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 18,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the repository implements an authentication API using FastAPI with asynchronous SQLAlchemy sessions and JWT-based token management.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 19,
+      "kind": "trap_technology",
+      "text": "The coverage computation uses an LLM provider to rerank evidence hits, deployed on Apache Kafka.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "partially_supported"
+      ]
+    },
+    {
+      "document": 19,
+      "kind": "trap_employment",
+      "text": "As Principal Engineer at Acme Analytics since 2016, downloads are served via signed URLs that expire after a configurable TTL.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 19,
+      "kind": "true_evidence",
+      "text": "The repository contains a Dramatiq actor that synchronizes GitHub repositories, classifies files, scans for secrets, and updates source artifacts in a database.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 19,
+      "kind": "trap_scope",
+      "text": "Led a team of 6 engineers that the project provides a retry wrapper that retries transient LLM provider failures with exponential backoff and jitter.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 19,
+      "kind": "true_employment",
+      "text": "As Backend Engineer at Acme Analytics since 2021, the system validates storage keys against a regex and disallows traversal or empty segments.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 19,
+      "kind": "true_evidence",
+      "text": "The worker layer interacts with evidence data through typed DTOs rather than raw ORM models.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    },
+    {
+      "document": 19,
+      "kind": "trap_metric",
+      "text": "Coverage calculation is performed by a Dramatiq actor that runs asynchronously and interacts with the database via SQLAlchemy sessions, cutting p95 latency by 43%.",
+      "claims": 1,
+      "caught": true,
+      "caught_llm_only": true,
+      "final_statuses": [
+        "unsupported"
+      ]
+    },
+    {
+      "document": 19,
+      "kind": "true_evidence",
+      "text": "The repository defines constants for lexical, vector, and skill weighting and candidate limits used in hybrid evidence retrieval.",
+      "claims": 1,
+      "caught": false,
+      "caught_llm_only": false,
+      "final_statuses": [
+        "supported"
+      ]
+    }
+  ],
+  "verifier_prompt": "claim_verify:v1"
+}

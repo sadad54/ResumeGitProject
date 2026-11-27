@@ -1,93 +1,99 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch, ApiError, setTokens, getAccessToken } from "@/lib/api";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Button } from "@proofhire/design-system/ui";
+import { api, unwrap } from "@/lib/api-client";
+import { ApiError } from "@/lib/api";
+import { useSession } from "@/lib/session";
 
-type TokenResponse = { access_token: string; refresh_token: string };
+function message(error: unknown, fallback: string) {
+  return error instanceof ApiError ? error.message : fallback;
+}
 
-export function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
+/** Sign in, sign up, or step into the read-only demo. */
+export function AuthPanel() {
+  const { signIn, startDemo } = useSession();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [signedIn, setSignedIn] = useState(false);
 
-  useEffect(() => {
-    // getAccessToken() reads localStorage, which doesn't exist during SSR.
-    // Calling it directly in the render body (as `typeof window !== "undefined"
-    // && getAccessToken()` did) makes the server always render the form (window
-    // is never defined server-side) while an already-logged-in client
-    // immediately renders null — a hydration mismatch. Deferring to an effect
-    // keeps the first client render identical to the SSR output.
-    setSignedIn(!!getAccessToken());
-  }, []);
-
-  if (signedIn) {
-    return null;
-  }
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await apiFetch<TokenResponse>(`/api/v1/auth/${mode}`, {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-      setTokens(result.access_token, result.refresh_token);
-      onAuthed();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const submit = useMutation({
+    mutationFn: async () =>
+      mode === "login"
+        ? unwrap(await api.POST("/api/v1/auth/login", { body: { email, password } }))
+        : unwrap(await api.POST("/api/v1/auth/signup", { body: { email, password } })),
+    onSuccess: signIn,
+  });
+  const demo = useMutation({ mutationFn: startDemo });
+  const busy = submit.isPending || demo.isPending;
 
   return (
-    <div className="max-w-sm rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-      <div className="mb-3 flex gap-2 text-sm">
-        <button
-          className={mode === "login" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setMode("login")}
-        >
-          Log in
-        </button>
-        <button
-          className={mode === "signup" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setMode("signup")}
-        >
-          Sign up
-        </button>
+    <div className="ph-auth" id="sign-in">
+      <div className="ph-segment" role="group" aria-label="Sign in or create an account">
+        {(["login", "signup"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            aria-pressed={mode === m}
+            className="ph-button"
+            onClick={() => {
+              setMode(m);
+              submit.reset();
+            }}
+          >
+            {m === "login" ? "Sign in" : "Create account"}
+          </button>
+        ))}
       </div>
-      <form onSubmit={submit} className="space-y-2">
-        <input
-          type="email"
-          placeholder="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-        />
-        <input
-          type="password"
-          placeholder="password"
-          required
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-        />
-        {error && <p className="text-xs text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded bg-neutral-900 px-2 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
-        >
-          {loading ? "..." : mode === "login" ? "Log in" : "Sign up"}
-        </button>
+      <form
+        className="ph-auth-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit.mutate();
+        }}
+      >
+        <label className="ph-field">
+          Email
+          <input
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </label>
+        <label className="ph-field">
+          Password{mode === "signup" && " (at least 8 characters)"}
+          <input
+            type="password"
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
+            required
+            minLength={8}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </label>
+        {submit.isError && (
+          <p className="ph-error" role="alert">
+            {message(submit.error, "Something went wrong. Try again.")}
+          </p>
+        )}
+        <Button type="submit" className="ph-button-primary" disabled={busy}>
+          {submit.isPending ? "Working…" : mode === "login" ? "Sign in" : "Create account"}
+        </Button>
       </form>
+      <div className="ph-auth-demo">
+        <span>No account yet?</span>
+        <Button type="button" disabled={busy} onClick={() => demo.mutate()}>
+          {demo.isPending ? "Opening demo…" : "Explore the live demo →"}
+        </Button>
+        {demo.isError && (
+          <p className="ph-error" role="alert">
+            {message(demo.error, "The demo is unavailable right now.")}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

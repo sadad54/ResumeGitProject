@@ -1,0 +1,258 @@
+{
+  "generated_at": "2026-09-28T01:49:07.934444+00:00",
+  "api": "http://localhost:8000",
+  "repositories": [
+    "sadad54/agentic-planner",
+    "sadad54/interviewpilot",
+    "sadad54/SAFE-RAG"
+  ],
+  "llm_provider": "groq",
+  "models": {
+    "evidence_extract": "openai/gpt-oss-20b",
+    "jd_extract": "openai/gpt-oss-120b",
+    "rerank": "openai/gpt-oss-20b",
+    "position": "openai/gpt-oss-120b",
+    "resume_write": "openai/gpt-oss-120b",
+    "cover_letter_write": "openai/gpt-oss-120b",
+    "claim_verify": "openai/gpt-oss-120b"
+  },
+  "embedding_model": "BAAI/bge-small-en-v1.5",
+  "stages": {
+    "signup": 0.3,
+    "connect_github": 0.5,
+    "refresh_repositories": 0.8,
+    "sync": 64.6,
+    "evidence_extraction": 150.5,
+    "analyze_job": 40.2,
+    "generate_resume": 52.8,
+    "export_and_download": 1.7
+  },
+  "sync": {
+    "events": {
+      "ping": 1,
+      "github.sync.started": 1,
+      "github.repo.analyzing": 3,
+      "github.repo.completed": 3,
+      "evidence.created": 18,
+      "github.sync.completed": 1
+    },
+    "repositories": {
+      "sadad54/interviewpilot": {
+        "artifacts_created": 74,
+        "files_scanned": 74,
+        "evidence_marked_stale": 0
+      },
+      "sadad54/SAFE-RAG": {
+        "artifacts_created": 63,
+        "files_scanned": 69,
+        "evidence_marked_stale": 0
+      },
+      "sadad54/agentic-planner": {
+        "artifacts_created": 20,
+        "files_scanned": 20,
+        "evidence_marked_stale": 0
+      }
+    }
+  },
+  "evidence": {
+    "count": 51,
+    "repository_status": {
+      "sadad54/SAFE-RAG": "completed",
+      "sadad54/agentic-planner": "completed",
+      "sadad54/interviewpilot": "completed"
+    },
+    "by_type": {
+      "implementation": 17,
+      "skill_usage": 8,
+      "architecture": 5,
+      "testing": 3,
+      "deployment": 3,
+      "integration": 2,
+      "feature": 13
+    },
+    "examples": [
+      "Schema extraction and citation resolution",
+      "Attribution screening logic",
+      "Optional GPU\u2011enabled model stack",
+      "Hybrid retrieval with BM25 and reciprocal rank fusion",
+      "Development tooling",
+      "Prompt rendering and hashing utilities",
+      "Fast local generation with vLLM",
+      "Schema\u2011based answer validation",
+      "ObliQA data adaptation",
+      "Core CPU\u2011only dependencies"
+    ]
+  },
+  "job": {
+    "status": "ready",
+    "role": "AI Engineer \u2014 LLM Applications",
+    "company": null
+  },
+  "coverage": {
+    "requirements": 8,
+    "labels": {
+      "strong": 3,
+      "gap": 1,
+      "partial": 4
+    },
+    "required_labels": {
+      "strong": 1,
+      "gap": 1,
+      "partial": 2
+    }
+  },
+  "generation": {
+    "claims": 7,
+    "verification": {
+      "supported": 6,
+      "partially_supported": 1
+    },
+    "claims_with_evidence": 6,
+    "token_usage": {
+      "input_tokens": 9026,
+      "output_tokens": 5484,
+      "call_count": 5
+    },
+    "llm_latency_ms_total": 51765,
+    "prompt_versions": [
+      "position:v1",
+      "resume_write:v2",
+      "claim_verify:v1"
+    ],
+    "estimated_cost_usd_reported": 0.0,
+    "resume_bullets": 6,
+    "projects": [
+      {
+        "name": "sadad54/interviewpilot",
+        "bullets": [
+          "Implemented a FastAPI backend with CORS middleware and modular router architecture separating sessions, questions, responses, and evaluations.",
+          "Integrated a Groq LLM client in an evaluation endpoint that parses JSON output and returns appropriate HTTP status codes for validation errors.",
+          "Containerized the FastAPI service using Docker, defining a Dockerfile that installs dependencies, copies source code, exposes port 8000, and runs the app with uvicorn."
+        ]
+      },
+      {
+        "name": "sadad54/SAFE-RAG",
+        "bullets": [
+          "Configured development tooling with pytest, pytest-cov, and ruff to enforce unit testing and code quality.",
+          "Developed a hybrid retrieval pipeline combining BM25Retriever and reciprocal rank fusion for enhanced search relevance."
+        ]
+      },
+      {
+        "name": "sadad54/agentic-planner",
+        "bullets": [
+          "Defined a catalog of five tools with explicit signatures and usage constraints to enable structured tool-calling in LLM agents."
+        ]
+      }
+    ],
+    "claims_detail": [
+      {
+        "text": "Integrated a Groq LLM client in an evaluation endpoint that parses JSON output and returns appropriate HTTP status codes for validation errors.",
+        "status": "supported",
+        "evidence": "Evaluation endpoint uses Groq client and validates LLM output"
+      },
+      {
+        "text": "Configured development tooling with pytest, pytest-cov, and ruff to enforce unit testing and code quality.",
+        "status": "supported",
+        "evidence": "Development tooling"
+      },
+      {
+        "text": "Implemented a FastAPI backend with CORS middleware and modular router architecture separating sessions, questions, responses, and evaluations.",
+        "status": "supported",
+        "evidence": "FastAPI backend with CORS and modular routers"
+      },
+      {
+        "text": "Developer experienced in building FastAPI services, integrating LLM APIs, containerizing applications, and implementing retrieval-augmented pipelines and tool catalogs.",
+        "status": "partially_supported",
+        "evidence": null
+      },
+      {
+        "text": "Developed a hybrid retrieval pipeline combining BM25Retriever and reciprocal rank fusion for enhanced search relevance.",
+        "status": "supported",
+        "evidence": "Hybrid retrieval with BM25 and reciprocal rank fusion"
+      },
+      {
+        "text": "Containerized the FastAPI service using Docker, defining a Dockerfile that installs dependencies, copies source code, exposes port 8000, and runs the app with uvicorn.",
+        "status": "supported",
+        "evidence": "Docker containerization of the backend"
+      },
+      {
+        "text": "Defined a catalog of five tools with explicit signatures and usage constraints to enable structured tool-calling in LLM agents.",
+        "status": "supported",
+        "evidence": "Defined tool catalog with explicit signatures"
+      }
+    ],
+    "skills_listed": 12
+  },
+  "export": {
+    "page_count": 1,
+    "overflowed": false,
+    "pdf_bytes": 27648,
+    "content_disposition": "attachment; filename=\"resume-v1-cd1a46fd.pdf\""
+  },
+  "ok": true,
+  "llm_usage": {
+    "per_task": {
+      "evidence_extract": {
+        "calls": 9,
+        "input_tokens": 26427,
+        "output_tokens": 6056,
+        "latency_ms": 184990,
+        "models": [
+          "openai/gpt-oss-20b"
+        ]
+      },
+      "jd_extract": {
+        "calls": 1,
+        "input_tokens": 1090,
+        "output_tokens": 479,
+        "latency_ms": 8372,
+        "models": [
+          "openai/gpt-oss-120b"
+        ]
+      },
+      "rerank": {
+        "calls": 8,
+        "input_tokens": 6602,
+        "output_tokens": 1302,
+        "latency_ms": 28946,
+        "models": [
+          "openai/gpt-oss-20b"
+        ]
+      },
+      "position": {
+        "calls": 1,
+        "input_tokens": 802,
+        "output_tokens": 812,
+        "latency_ms": 1918,
+        "models": [
+          "openai/gpt-oss-120b"
+        ]
+      },
+      "resume_write": {
+        "calls": 2,
+        "input_tokens": 3985,
+        "output_tokens": 1259,
+        "latency_ms": 17914,
+        "models": [
+          "openai/gpt-oss-120b"
+        ]
+      },
+      "claim_verify": {
+        "calls": 2,
+        "input_tokens": 4239,
+        "output_tokens": 3413,
+        "latency_ms": 31933,
+        "models": [
+          "openai/gpt-oss-120b"
+        ]
+      }
+    },
+    "totals": {
+      "calls": 23,
+      "input_tokens": 43145,
+      "output_tokens": 13321
+    }
+  },
+  "cleanup": "user deleted (204)",
+  "total_seconds": 311.4
+}

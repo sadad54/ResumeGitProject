@@ -46,8 +46,11 @@ async def test_coverage_loop_stops_and_marks_job_cancelled(monkeypatch):
             raise AssertionError("reranker must not run after cancel")
 
     class _Embedder:
-        async def embed(self, texts, *, model):
-            return [[0.0] * 1536 for _ in texts]
+        model_id = "test-embedder"
+        dimension = 384
+
+        async def embed(self, texts, *, input_type="document"):
+            return [[0.0] * 384 for _ in texts]
 
     monkeypatch.setattr(coverage, "get_provider", lambda: _Provider())
     monkeypatch.setattr(coverage, "get_embedding_provider", lambda: _Embedder())

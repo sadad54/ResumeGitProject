@@ -97,7 +97,12 @@ export interface paths {
          *     Hard delete, by design (see docs/adr/0016-deletion-policy.md): this is the
          *     user's own data-erasure path, so leaving soft-deleted rows behind would
          *     defeat the point. Every owned table cascades from `users`, including the
-         *     encrypted GitHub token.
+         *     encrypted GitHub token; rendered exports live outside the database and
+         *     are removed first, by owner prefix.
+         *
+         *     Files before rows: if storage is unreachable the request fails and
+         *     nothing is deleted, so the user can retry. The other order could strand
+         *     their exported resumes with no account left to find them through.
          */
         delete: operations["delete_account_api_v1_auth_me_delete"];
         options?: never;
@@ -133,6 +138,23 @@ export interface paths {
         put?: never;
         /** Signup */
         post: operations["signup_api_v1_auth_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/demo/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Demo Session */
+        post: operations["start_demo_session_api_v1_demo_session_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -184,8 +206,41 @@ export interface paths {
          * Get Document Claims
          * @description Backs the resume workspace's provenance rail (PRD §11.4): click a
          *     bullet, see exactly which repository/file it traces back to.
+         *
+         *     One query. It used to issue four per claim (link, evidence, repository,
+         *     source), and took whichever link row came back first; this picks each
+         *     claim's strongest supporting evidence and that evidence's most relevant
+         *     source, deterministically.
          */
         get: operations["get_document_claims_api_v1_documents__document_id__claims_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Download Link
+         * @description Authorize here, then let the browser fetch the bytes straight from
+         *     storage through a short-lived signed URL (checklist §17 "signed
+         *     object-storage URLs"). The bytes never pass through this process, and the
+         *     link carries no bearer token.
+         *
+         *     410 when the export's files are gone — e.g. the single-container deploy
+         *     restarted and its local disk was wiped. The stale refs are cleared so the
+         *     document reads as not-yet-exported and the UI offers Export again, rather
+         *     than every future download failing the same way.
+         */
+        get: operations["get_download_link_api_v1_documents__document_id__download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -209,23 +264,6 @@ export interface paths {
          *     validation cycle, same rationale as resume upload and positioning.
          */
         post: operations["export_document_endpoint_api_v1_documents__document_id__export_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/documents/{document_id}/pdf": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Document Pdf */
-        get: operations["download_document_pdf_api_v1_documents__document_id__pdf_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -373,7 +411,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Callback */
+        /**
+         * Callback
+         * @description GitHub sends the browser here after the consent screen, so every
+         *     outcome must send it back to the web app. This used to require `code`
+         *     and raise on failure, so clicking Cancel on GitHub (which returns
+         *     `error=access_denied` and no code) left the user on the API's domain
+         *     looking at a JSON 422. Reasons are short fixed codes, never GitHub's
+         *     free-text error, since they end up in a URL the web app renders.
+         */
         get: operations["callback_api_v1_github_callback_get"];
         put?: never;
         post?: never;
@@ -692,6 +738,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Overview */
+        get: operations["get_overview_api_v1_me_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile/facts": {
         parameters: {
             query?: never;
@@ -802,6 +865,11 @@ export interface components {
         /** AnalyzeResponse */
         AnalyzeResponse: {
             /**
+             * Events After
+             * @default 0-0
+             */
+            events_after: string;
+            /**
              * Job Id
              * Format: uuid
              */
@@ -811,6 +879,13 @@ export interface components {
              * @default queued
              */
             status: string;
+        };
+        /** ApplicationCounts */
+        ApplicationCounts: {
+            /** Active */
+            active: number;
+            /** Total */
+            total: number;
         };
         /** ApplicationCreateRequest */
         ApplicationCreateRequest: {
@@ -896,11 +971,42 @@ export interface components {
             /** Requirement Text */
             requirement_text: string;
         };
+        /** DocumentCounts */
+        DocumentCounts: {
+            /** Exported */
+            exported: number;
+            /** Total */
+            total: number;
+        };
         /**
          * DocumentType
          * @enum {string}
          */
         DocumentType: "resume" | "cover_letter";
+        /**
+         * DownloadLink
+         * @description A short-lived signed URL the browser navigates to directly. Carries no
+         *     bearer token, so it can be a plain link; it stops working at expires_at.
+         */
+        DownloadLink: {
+            /** Expires At */
+            expires_at: number;
+            /** Filename */
+            filename: string;
+            /** Url */
+            url: string;
+        };
+        /** EvidenceCounts */
+        EvidenceCounts: {
+            /** Candidate */
+            candidate: number;
+            /** Confirmed */
+            confirmed: number;
+            /** Stale */
+            stale: number;
+            /** Total */
+            total: number;
+        };
         /** EvidenceDetail */
         EvidenceDetail: {
             /** Confidence */
@@ -1073,6 +1179,11 @@ export interface components {
         };
         /** GenerateResponse */
         GenerateResponse: {
+            /**
+             * Events After
+             * @default 0-0
+             */
+            events_after: string;
             /** Generation Run Id */
             generation_run_id?: string | null;
             /**
@@ -1111,12 +1222,17 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Exported At */
+            exported_at?: string | null;
+            /**
              * Generation Run Id
              * Format: uuid
              */
             generation_run_id: string;
-            /** Html Ref */
-            html_ref?: string | null;
             /**
              * Id
              * Format: uuid
@@ -1129,10 +1245,16 @@ export interface components {
             job_id: string;
             /** Page Count */
             page_count?: number | null;
-            /** Pdf Ref */
-            pdf_ref?: string | null;
-            /** Plaintext Ref */
-            plaintext_ref?: string | null;
+            /**
+             * Pdf Available
+             * @default false
+             */
+            pdf_available: boolean;
+            /**
+             * Plaintext Available
+             * @default false
+             */
+            plaintext_available: boolean;
             /** Template Id */
             template_id: string;
             type: components["schemas"]["DocumentType"];
@@ -1175,6 +1297,17 @@ export interface components {
          * @enum {string}
          */
         GenerationRunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+        /** GitHubStatus */
+        GitHubStatus: {
+            /** Connected */
+            connected: boolean;
+            /** Connected At */
+            connected_at?: string | null;
+            /** Last Sync At */
+            last_sync_at?: string | null;
+            /** Login */
+            login?: string | null;
+        };
         /** GraphEdge */
         GraphEdge: {
             /**
@@ -1260,6 +1393,13 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** JobCounts */
+        JobCounts: {
+            /** Ready */
+            ready: number;
+            /** Total */
+            total: number;
+        };
         /** JobCreateRequest */
         JobCreateRequest: {
             /** Source Text */
@@ -1312,6 +1452,15 @@ export interface components {
          * @enum {string}
          */
         MatchLabel: "strong" | "partial" | "gap" | "unknown";
+        /** OverviewResponse */
+        OverviewResponse: {
+            applications: components["schemas"]["ApplicationCounts"];
+            documents: components["schemas"]["DocumentCounts"];
+            evidence: components["schemas"]["EvidenceCounts"];
+            github: components["schemas"]["GitHubStatus"];
+            jobs: components["schemas"]["JobCounts"];
+            repositories: components["schemas"]["RepositoryCounts"];
+        };
         /** PositioningResponse */
         PositioningResponse: {
             /** Gaps To Avoid */
@@ -1362,6 +1511,17 @@ export interface components {
         RefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /** RepositoryCounts */
+        RepositoryCounts: {
+            /** In Progress */
+            in_progress: number;
+            /** Selected */
+            selected: number;
+            /** Synced */
+            synced: number;
+            /** Total */
+            total: number;
         };
         /** RepositoryPatch */
         RepositoryPatch: {
@@ -1439,7 +1599,7 @@ export interface components {
          * SyncStatus
          * @enum {string}
          */
-        SyncStatus: "idle" | "queued" | "syncing" | "completed" | "failed";
+        SyncStatus: "idle" | "queued" | "syncing" | "extracting" | "completed" | "failed";
         /** SyncStatusResponse */
         SyncStatusResponse: {
             /** Error */
@@ -1460,6 +1620,11 @@ export interface components {
         };
         /** SyncTriggerResponse */
         SyncTriggerResponse: {
+            /**
+             * Events After
+             * @default 0-0
+             */
+            events_after: string;
             /**
              * Run Id
              * Format: uuid
@@ -1503,6 +1668,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Is Demo
+             * @default false
+             */
+            is_demo: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -1794,6 +1964,26 @@ export interface operations {
             };
         };
     };
+    start_demo_session_api_v1_demo_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+        };
+    };
     list_documents_api_v1_documents_get: {
         parameters: {
             query?: never;
@@ -1876,6 +2066,39 @@ export interface operations {
             };
         };
     };
+    get_download_link_api_v1_documents__document_id__download_get: {
+        parameters: {
+            query?: {
+                format?: "pdf" | "txt";
+            };
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_document_endpoint_api_v1_documents__document_id__export_post: {
         parameters: {
             query?: {
@@ -1897,37 +2120,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExportResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_document_pdf_api_v1_documents__document_id__pdf_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1976,8 +2168,13 @@ export interface operations {
     };
     stream_run_events_api_v1_events_runs__run_id__get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                /** @description Replay events after this stream id (a trigger's events_after) */
+                after?: string | null;
+            };
+            header?: {
+                "Last-Event-ID"?: string | null;
+            };
             path: {
                 run_id: string;
             };
@@ -2205,9 +2402,10 @@ export interface operations {
     };
     callback_api_v1_github_callback_get: {
         parameters: {
-            query: {
-                code: string;
-                state: string;
+            query?: {
+                state?: string;
+                code?: string | null;
+                error?: string | null;
             };
             header?: never;
             path?: never;
@@ -2729,6 +2927,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_overview_api_v1_me_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewResponse"];
                 };
             };
         };

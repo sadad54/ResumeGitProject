@@ -81,12 +81,20 @@ def test_demo_account_can_still_read(client, demo_tokens):
     assert response.status_code == 200
 
 
-def test_demo_account_logout_is_blocked_as_a_mutation(client, demo_tokens):
-    """logout is a POST, so the same read-only gate covers it — a demo visitor
-    ending their own session isn't a real-world need worth special-casing."""
+def test_demo_account_can_sign_out_and_its_tokens_die(client, demo_tokens):
+    """Reversed deliberately: this used to assert a 403, on the grounds that a
+    demo visitor ending their own session wasn't worth special-casing. Once
+    the UI had a Sign out button, that 403 left two bad options — show an
+    error, or drop the tokens locally while a 30-day refresh token stayed
+    valid (a recruiter on a shared machine). Logout is now the one auth write
+    the read-only guard exempts, by exact route (dependencies.py)."""
+    auth = {"Authorization": f"Bearer {demo_tokens['access_token']}"}
     response = client.post(
-        "/api/v1/auth/logout",
-        json={"refresh_token": demo_tokens["refresh_token"]},
-        headers={"Authorization": f"Bearer {demo_tokens['access_token']}"},
+        "/api/v1/auth/logout", json={"refresh_token": demo_tokens["refresh_token"]}, headers=auth
     )
-    assert response.status_code == 403
+    assert response.status_code == 204
+    assert client.get("/api/v1/auth/me", headers=auth).status_code == 401
+    refreshed = client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": demo_tokens["refresh_token"]}
+    )
+    assert refreshed.status_code == 401

@@ -1,0 +1,25 @@
+name: Keep the demo awake
+# Opt-in. Free Hugging Face Spaces sleep after 48 idle hours (the next visitor
+# waits ~1 minute for a cold start) and free Supabase projects pause after 7
+# idle days (the API then fails every request until someone restores it by
+# hand: finding F3). One request a day to /ready reaches both: it wakes the
+# Space and runs a query on the database.
+#
+# Runs only where the repository variable PROOFHIRE_API_URL is set (Settings
+# -> Secrets and variables -> Actions -> Variables), e.g.
+# https://<hf-user>-proofhire.hf.space, so forks never ping anything.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+permissions: {}
+jobs:
+  ping:
+    if: vars.PROOFHIRE_API_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: GET /ready (retries through a cold start)
+        run: |
+          curl -fsS --retry 8 --retry-delay 30 --retry-all-errors --max-time 120 \
+            "${{ vars.PROOFHIRE_API_URL }}/ready"

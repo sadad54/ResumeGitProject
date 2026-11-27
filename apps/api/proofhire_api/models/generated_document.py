@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime
 
 from proofhire_contracts import DocumentType
-from sqlalchemy import JSON, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,9 +30,24 @@ class GeneratedDocument(Base):
     template_id: Mapped[str] = mapped_column(String(50), nullable=False, default="ats_minimal")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     content_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    # Object-storage keys (services/object_storage.py), never filesystem paths
+    # and never returned to clients — the API exposes *_available flags and
+    # hands out short-lived signed URLs instead.
     html_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     pdf_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     plaintext_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     # Measured from the rendered PDF at export time, so the UI can warn about a
     # resume that has quietly spilled onto a second page.
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    exported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    @property
+    def pdf_available(self) -> bool:
+        return self.pdf_ref is not None
+
+    @property
+    def plaintext_available(self) -> bool:
+        return self.plaintext_ref is not None

@@ -36,5 +36,8 @@ class UserPublic(BaseModel):
     email: EmailStr
     display_name: str | None
     created_at: datetime
+    # The shared read-only guest account (routers/demo.py). The UI uses it to
+    # disable writes up front instead of letting each one fail with a 403.
+    is_demo: bool = False
 
     model_config = {"from_attributes": True}

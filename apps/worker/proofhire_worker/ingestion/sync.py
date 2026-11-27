@@ -131,7 +131,11 @@ async def _sync_one_repository(
     repository.last_commit_sha = sha
     repository.last_analyzed_sha = sha
     repository.language_summary = language_summary
-    repository.sync_status = SyncStatus.COMPLETED
+    # Changed files go on to LLM extraction (queued by _run), which settles
+    # the status when it finishes; nothing changed means nothing to wait for.
+    repository.sync_status = (
+        SyncStatus.EXTRACTING if changed_artifact_ids else SyncStatus.COMPLETED
+    )
     await session.commit()
 
     await publish_event(
@@ -201,11 +205,18 @@ async def _run(run_id_str: str, repository_ids: list[str]) -> None:
                 # block the rest of this sync run.
                 from proofhire_worker.intelligence.evidence_extraction import extract_evidence
 
-                extract_evidence.send(
-                    str(repository.id),
-                    run_id_str,
-                    [str(a) for a in changed_artifact_ids],
-                )
+                try:
+                    extract_evidence.send(
+                        str(repository.id),
+                        run_id_str,
+                        [str(a) for a in changed_artifact_ids],
+                    )
+                except Exception:
+                    # Never leave a repository "extracting" for work that was
+                    # never queued: nothing would ever settle it.
+                    repository.sync_status = SyncStatus.FAILED
+                    await session.commit()
+                    raise
 
             sync_run.status = SyncStatus.COMPLETED
         except Exception as exc:
@@ -217,6 +228,24 @@ async def _run(run_id_str: str, repository_ids: list[str]) -> None:
 
             sync_run.completed_at = datetime.now(UTC)
             await session.commit()
+            # Always exactly one terminal event, so a watching client can stop
+            # waiting whether the run succeeded or not. The detailed error
+            # stays on the SyncRun row (GET /github/sync/{run_id}).
+            if sync_run.status == SyncStatus.COMPLETED:
+                await publish_event(
+                    run_id_str,
+                    RunEventName.GITHUB_SYNC_COMPLETED,
+                    {"run_id": run_id_str, "repository_ids": repository_ids},
+                )
+            else:
+                await publish_event(
+                    run_id_str,
+                    RunEventName.GITHUB_SYNC_FAILED,
+                    {
+                        "run_id": run_id_str,
+                        "message": "Sync failed. Check the GitHub connection and try again.",
+                    },
+                )
 
 
 @dramatiq.actor(max_retries=2, queue_name="ingest")

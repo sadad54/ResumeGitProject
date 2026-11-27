@@ -1,19 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch, ApiError, getAccessToken } from "@/lib/api";
-
-type Evidence = {
-  id: string;
-  repository_id: string;
-  evidence_type: string;
-  title: string;
-  normalized_claim: string;
-  description: string;
-  confidence: number;
-  status: "candidate" | "confirmed" | "rejected" | "private" | "stale";
-  created_at: string;
-};
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { SkeletonList } from "@proofhire/design-system/ui";
+import { api, unwrap } from "@/lib/api-client";
+import { qk, useEvidence, type Evidence } from "@/lib/queries";
+import { useSession } from "@/lib/session";
+import { DEMO_READ_ONLY, RequireSession } from "./session-ui";
 
 const STATUS_LABEL: Record<string, string> = {
   candidate: "Needs review",
@@ -24,157 +17,139 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /**
- * Explorer View (PRD §10 Evidence page). Graph View (Constellation) and
- * Repository View land in Phase 7 — this is a plain filterable list for now,
- * which is also the permanent accessible fallback the graph view needs (§11.8).
+ * Explorer view (PRD §10 Evidence page): the filterable list that is also
+ * the permanent accessible equivalent of the graph view (§11.8).
  */
 export function EvidenceExplorer() {
+  return (
+    <RequireSession what="review your evidence">
+      <Explorer />
+    </RequireSession>
+  );
+}
+
+function Explorer() {
+  const { canWrite } = useSession();
+  const queryClient = useQueryClient();
+  const evidence = useEvidence();
   const [query, setQuery] = useState("");
-  const [signedIn, setSignedIn] = useState(false);
-  const [items, setItems] = useState<Evidence[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setSignedIn(!!getAccessToken());
-    if (!getAccessToken()) return;
-    void load();
-  }, []);
-
-  async function load() {
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await apiFetch<Evidence[]>("/api/v1/evidence");
-      setItems(list);
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Failed to load evidence",
+  const setStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: Evidence["status"] }) =>
+      unwrap(
+        await api.PATCH("/api/v1/evidence/{evidence_id}", {
+          params: { path: { evidence_id: id } },
+          body: { status },
+        }),
+      ),
+    // Optimistic: reviewing is a stream of quick decisions; each one shows
+    // immediately and rolls back only if the server refuses it.
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: qk.evidence.all, exact: true });
+      const previous = queryClient.getQueryData<Evidence[]>(qk.evidence.all);
+      queryClient.setQueryData<Evidence[]>(qk.evidence.all, (list) =>
+        list?.map((e) => (e.id === id ? { ...e, status } : e)),
       );
-    } finally {
-      setLoading(false);
-    }
-  }
+      return { previous };
+    },
+    onError: (_err, _vars, context) =>
+      queryClient.setQueryData(qk.evidence.all, context?.previous),
+    onSettled: () => {
+      // The graph and the overview counters read the same rows.
+      void queryClient.invalidateQueries({ queryKey: qk.evidence.all });
+      void queryClient.invalidateQueries({ queryKey: qk.overview });
+    },
+  });
 
-  async function setStatus(id: string, status: string) {
-    try {
-      const updated = await apiFetch<Evidence>(`/api/v1/evidence/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
-      setItems((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
-      window.dispatchEvent(new Event("proofhire:evidence-updated"));
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not update evidence.",
-      );
-    }
-  }
-
-  if (!signedIn) {
+  if (evidence.isPending) return <SkeletonList count={3} />;
+  if (evidence.isError)
     return (
-      <p className="text-sm text-neutral-500">
-        Log in on Home to view evidence.
+      <p className="ph-error" role="alert">
+        Couldn&apos;t load evidence. {evidence.error.message}
       </p>
     );
-  }
 
-  const visible = items.filter(
+  const visible = evidence.data.filter(
     (e) =>
       (statusFilter === "all" || e.status === statusFilter) &&
-      `${e.title} ${e.normalized_claim}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+      `${e.title} ${e.normalized_claim}`.toLowerCase().includes(query.toLowerCase()),
   );
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="ph-toolbar">
         <label className="ph-field">
           Search evidence
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
-        <select
-          aria-label="Filter evidence status"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-        >
-          <option value="all">All statuses</option>
-          <option value="candidate">Needs review</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="rejected">Rejected</option>
-          <option value="private">Private</option>
-        </select>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700"
-        >
-          Refresh
-        </button>
-        <span className="text-xs text-neutral-500">{visible.length} items</span>
+        <label className="ph-field">
+          Status
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="candidate">Needs review</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="rejected">Rejected</option>
+            <option value="private">Private</option>
+            <option value="stale">Stale</option>
+          </select>
+        </label>
+        <span className="text-xs text-neutral-500" role="status">
+          {visible.length} of {evidence.data.length} items
+          {evidence.isFetching && " · refreshing"}
+        </span>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {setStatus.isError && (
+        <p className="ph-error" role="alert">
+          {setStatus.error.message}
+        </p>
+      )}
 
       <ul className="space-y-2">
         {visible.map((item) => (
-          <li
-            key={item.id}
-            className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800"
-          >
+          <li key={item.id} className="ph-source">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{item.title}</span>
-                  <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                    {item.evidence_type}
+                  <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs dark:bg-neutral-800">
+                    {item.evidence_type.replaceAll("_", " ")}
                   </span>
-                  <span className="text-xs text-neutral-500">
+                  <span className={`ph-status ph-status-${item.status}`}>
                     {STATUS_LABEL[item.status] ?? item.status}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                  {item.normalized_claim}
-                </p>
+                <p className="mt-1 text-sm">{item.normalized_claim}</p>
                 <p className="mt-1 text-xs text-neutral-500">
                   confidence {Math.round(item.confidence * 100)}%
                 </p>
               </div>
-              <div className="flex shrink-0 gap-1">
-                <button
-                  onClick={() => setStatus(item.id, "confirmed")}
-                  className="rounded border border-green-300 px-2 py-1 text-xs text-green-700 dark:border-green-800 dark:text-green-400"
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={() => setStatus(item.id, "rejected")}
-                  className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 dark:border-red-800 dark:text-red-400"
-                >
-                  Reject
-                </button>
-                <button
-                  onClick={() => setStatus(item.id, "private")}
-                  className="rounded border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
-                >
-                  Private
-                </button>
+              <div className="flex shrink-0 gap-1" role="group" aria-label={`Review ${item.title}`}>
+                {(["confirmed", "rejected", "private"] as const).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    className="ph-button"
+                    aria-pressed={item.status === status}
+                    disabled={!canWrite}
+                    title={!canWrite ? DEMO_READ_ONLY : undefined}
+                    onClick={() => setStatus.mutate({ id: item.id, status })}
+                  >
+                    {status === "confirmed" ? "Confirm" : status === "rejected" ? "Reject" : "Private"}
+                  </button>
+                ))}
               </div>
             </div>
           </li>
         ))}
       </ul>
 
-      {visible.length === 0 && !loading && (
+      {visible.length === 0 && (
         <p className="text-sm text-neutral-500">
-          No evidence yet — sync a repository from Home first.
+          {evidence.data.length === 0
+            ? "No evidence yet. Connect GitHub and sync a repository in Settings."
+            : "Nothing matches these filters."}
         </p>
       )}
     </div>

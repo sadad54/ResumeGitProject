@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { CommandPalette } from "./command-palette";
+import { SessionBanners, UserMenu } from "./session-ui";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", symbol: "◈" },
@@ -66,15 +67,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
       <div className="ph-main">
         <header className="ph-topbar">
-          <span>
+          <span className="ph-crumb">
             Workspace <span aria-hidden="true">/</span>{" "}
             <strong>
               {NAV_ITEMS.find((n) => n.href === pathname)?.label || "ProofHire"}
             </strong>
           </span>
-          <CommandPalette />
+          <span className="ph-topbar-actions">
+            <CommandPalette />
+            <UserMenu />
+          </span>
         </header>
         <main id="main-content" tabIndex={-1}>
+          <SessionBanners />
           {children}
         </main>
       </div>

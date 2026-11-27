@@ -4,8 +4,12 @@ upload (Phase 5) — one bounded render/validate cycle, not a multi-stage
 pipeline that benefits from queueing.
 """
 
+from datetime import UTC, datetime
+
 from proofhire_api.models.generated_claim import GeneratedClaim
 from proofhire_api.models.generated_document import GeneratedDocument
+from proofhire_api.models.job import Job
+from proofhire_api.services.object_storage import document_key, get_object_storage
 from proofhire_api.telemetry import traced_stage
 from proofhire_contracts import ClaimVerificationStatus, DocumentType
 from sqlalchemy import select
@@ -17,10 +21,12 @@ from proofhire_worker.render.parse_back import (
     validate_parse_back,
 )
 from proofhire_worker.render.pdf_renderer import DEFAULT_PAGE_SIZE, PageSize, render_html_to_pdf
-from proofhire_worker.render.storage import save_bytes
-from proofhire_worker.render.templates import render_cover_letter_html, render_resume_html
+from proofhire_worker.render.templates import (
+    render_cover_letter_html,
+    render_resume_html,
+    resume_sections,
+)
 
-RESUME_REQUIRED_SECTIONS = ["Summary", "Skills", "Experience"]
 
 
 class ParseBackValidationError(Exception):
@@ -44,7 +50,7 @@ async def export_document(
     )
     if document.type == DocumentType.RESUME:
         html_content = render_resume_html(document.content_json, contact_email, chosen_template)
-        required_texts = list(RESUME_REQUIRED_SECTIONS)
+        required_texts = resume_sections(document.content_json)
     else:
         html_content = render_cover_letter_html(document.content_json, contact_email)
         required_texts = []
@@ -75,10 +81,21 @@ async def export_document(
 
     plaintext = extract_pdf_text(pdf_bytes)
 
+    # One deterministic key per document and format: a re-export (new
+    # template, new page size) overwrites the previous files rather than
+    # leaving them orphaned, and account deletion is a prefix delete.
+    job = await session.get(Job, document.job_id)
+    storage = get_object_storage()
+    keys = {ext: document_key(job.user_id, document.id, ext) for ext in ("html", "pdf", "txt")}
+    await storage.put(keys["html"], html_content.encode("utf-8"), "text/html; charset=utf-8")
+    await storage.put(keys["pdf"], pdf_bytes, "application/pdf")
+    await storage.put(keys["txt"], plaintext.encode("utf-8"), "text/plain; charset=utf-8")
+
     document.template_id = chosen_template
-    document.html_ref = save_bytes("html", "html", html_content)
-    document.pdf_ref = save_bytes("pdf", "pdf", pdf_bytes)
-    document.plaintext_ref = save_bytes("plaintext", "txt", plaintext)
+    document.html_ref = keys["html"]
+    document.pdf_ref = keys["pdf"]
+    document.plaintext_ref = keys["txt"]
+    document.exported_at = datetime.now(UTC)
 
     await session.commit()
     await session.refresh(document)

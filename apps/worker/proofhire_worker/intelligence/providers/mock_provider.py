@@ -62,19 +62,3 @@ class MockLLMProvider:
                 estimated_cost_usd=0.0,
             ),
         )
-
-    async def embed(self, texts: list[str], *, model: str) -> list[list[float]]:
-        # Deterministic pseudo-embedding: hash-based, stable across calls for the
-        # same text. Dimension matches EMBEDDING_DIMENSION (the real OpenAI
-        # text-embedding-3-small size) so the pgvector column works identically
-        # whether or not a real OPENAI_API_KEY is configured in local dev.
-        import hashlib
-
-        from proofhire_contracts.embedding import EMBEDDING_DIMENSION
-
-        vectors: list[list[float]] = []
-        for text in texts:
-            digest = hashlib.sha256(text.encode("utf-8")).digest()
-            # Cycle the 32-byte digest to fill EMBEDDING_DIMENSION floats.
-            vectors.append([digest[i % len(digest)] / 255.0 for i in range(EMBEDDING_DIMENSION)])
-        return vectors

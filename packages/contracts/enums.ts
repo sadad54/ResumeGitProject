@@ -122,6 +122,7 @@ export enum SyncStatus {
   Idle = "idle",
   Queued = "queued",
   Syncing = "syncing",
+  Extracting = "extracting",
   Completed = "completed",
   Failed = "failed",
 }
@@ -130,6 +131,8 @@ export enum RunEventName {
   GithubSyncStarted = "github.sync.started",
   GithubRepoAnalyzing = "github.repo.analyzing",
   GithubRepoCompleted = "github.repo.completed",
+  GithubSyncCompleted = "github.sync.completed",
+  GithubSyncFailed = "github.sync.failed",
   EvidenceCreated = "evidence.created",
   JobCaptured = "job.captured",
   JobAnalysisStarted = "job.analysis.started",

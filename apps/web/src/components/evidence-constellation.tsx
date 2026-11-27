@@ -2,8 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch, getAccessToken } from "@/lib/api";
-import type { EvidenceGraph } from "@/lib/graph";
 import {
   Button,
   ConfidenceIndicator,
@@ -11,82 +9,50 @@ import {
   Skeleton,
   StatusPill,
 } from "@proofhire/design-system/ui";
+import { useEvidenceGraph, useJobs } from "@/lib/queries";
+import { useSession } from "@/lib/session";
 
 const Canvas = dynamic(() => import("./constellation-canvas"), {
   ssr: false,
   loading: () => <Skeleton height="420px" label="Loading graph" />,
 });
-type Job = { id: string; role: string | null; company: string | null };
 
-export function EvidenceConstellation({
-  jobId,
-  refreshKey = 0,
-}: {
-  jobId?: string;
-  refreshKey?: number;
-}) {
-  const [graph, setGraph] = useState<EvidenceGraph | null>(null);
-  const [jobs, setJobs] = useState<Job[]>([]);
+/**
+ * The signature view (PRD §11): evidence as a graph, optionally overlaid with
+ * one job's requirements and how each is covered. Data comes from the shared
+ * query cache, so reviewing evidence elsewhere on the page (which
+ * invalidates the "evidence" keys) refreshes this without any wiring.
+ */
+export function EvidenceConstellation({ jobId }: { jobId?: string }) {
+  const { status } = useSession();
   const [overlay, setOverlay] = useState("");
   const [view, setView] = useState<"graph" | "table">("table");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [revision, setRevision] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(true);
-  const [signedIn, setSignedIn] = useState(false);
   const activeJob = jobId || overlay;
-  useEffect(() => {
-    const update = () => setRevision((v) => v + 1);
-    window.addEventListener("proofhire:evidence-updated", update);
-    return () =>
-      window.removeEventListener("proofhire:evidence-updated", update);
-  }, []);
   const inspect = useCallback((id: string) => setSelected(id), []);
 
+  const jobs = useJobs();
+  const graphQuery = useEvidenceGraph(activeJob || null);
+  const graph = graphQuery.data ?? null;
+  const loading = graphQuery.isPending && status === "authenticated";
+  const error = graphQuery.isError
+    ? graphQuery.error.message
+    : jobs.isError && !jobId
+      ? "Could not load saved jobs. Refresh to retry."
+      : "";
+
   useEffect(() => {
-    setSignedIn(!!getAccessToken());
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReducedMotion(media.matches);
     update();
     media.addEventListener("change", update);
-    setView(
-      window.matchMedia("(min-width: 900px)").matches ? "graph" : "table",
-    );
-    if (!jobId && getAccessToken())
-      apiFetch<Job[]>("/api/v1/jobs")
-        .then(setJobs)
-        .catch(() => setError("Could not load saved jobs. Refresh to retry."));
+    setView(window.matchMedia("(min-width: 900px)").matches ? "graph" : "table");
     return () => media.removeEventListener("change", update);
-  }, [jobId]);
-
-  useEffect(() => {
-    if (!getAccessToken()) {
-      setLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    setLoading(true);
-    setError("");
-    setGraph(null);
-    setSelected(null);
-    const params = activeJob ? `?job_id=${encodeURIComponent(activeJob)}` : "";
-    apiFetch<EvidenceGraph>(`/api/v1/evidence/graph${params}`, {
-      signal: controller.signal,
-    })
-      .then(setGraph)
-      .catch((err) => {
-        if (!controller.signal.aborted)
-          setError(
-            err instanceof Error ? err.message : "Could not load graph.",
-          );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [activeJob, revision, refreshKey]);
+  }, []);
+  // A different overlay is a different graph; the old selection means nothing there.
+  useEffect(() => setSelected(null), [activeJob]);
 
   const active = graph?.nodes.find((n) => n.id === selected);
   const visible =
@@ -104,10 +70,10 @@ export function EvidenceConstellation({
   const requirements =
     graph?.nodes.filter((n) => n.kind === "requirement") ?? [];
 
-  if (!signedIn && !loading)
+  if (status === "anonymous")
     return (
       <EmptyState title="Your proof starts here" level="h2">
-        Log in on Home, then sync your GitHub repositories.
+        Sign in, then connect GitHub in Settings and sync your repositories.
       </EmptyState>
     );
   return (
@@ -153,7 +119,7 @@ export function EvidenceConstellation({
               onChange={(e) => setOverlay(e.target.value)}
             >
               <option value="">Your evidence only</option>
-              {jobs.map((job) => (
+              {(jobs.data ?? []).map((job) => (
                 <option key={job.id} value={job.id}>
                   {job.role || "Untitled job"}
                   {job.company ? ` · ${job.company}` : ""}
@@ -162,8 +128,11 @@ export function EvidenceConstellation({
             </select>
           </label>
         )}
-        <Button onClick={() => setRevision((v) => v + 1)} disabled={loading}>
-          Refresh graph
+        <Button
+          onClick={() => void graphQuery.refetch()}
+          disabled={graphQuery.isFetching}
+        >
+          {graphQuery.isFetching && !loading ? "Refreshing…" : "Refresh graph"}
         </Button>
       </div>
       {error && (

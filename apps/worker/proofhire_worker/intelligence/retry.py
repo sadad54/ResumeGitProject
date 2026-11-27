@@ -27,15 +27,20 @@ T = TypeVar("T")
 MAX_ATTEMPTS = 4
 BASE_DELAY_SECONDS = 0.5
 MAX_DELAY_SECONDS = 20.0
+# A server-supplied Retry-After is honoured in full up to this. Groq's
+# per-minute token windows ask for tens of seconds; capping at 20 s (as this
+# did) retried before the window reopened and burned the attempts. Longer than
+# this means a daily quota is spent: fail now rather than sleep on it.
+MAX_RETRY_AFTER_SECONDS = 90.0
 
 
 def _backoff_delay(attempt: int, retry_after: float | None) -> float:
-    """Exponential backoff with full jitter, floored by any server-supplied
-    Retry-After. Full jitter (rather than fixed backoff) matters because every
+    """Exponential backoff with full jitter, or the server's Retry-After when
+    it gives one. Full jitter (rather than fixed backoff) matters because every
     worker thread hits the same provider — synchronized retries would just
     recreate the burst that triggered the rate limit."""
     if retry_after is not None:
-        return min(retry_after, MAX_DELAY_SECONDS)
+        return retry_after
     ceiling = min(BASE_DELAY_SECONDS * (2**attempt), MAX_DELAY_SECONDS)
     return random.uniform(0, ceiling)
 
@@ -78,7 +83,14 @@ async def with_retries(
         except Exception as exc:
             if not is_retryable(exc) or attempt == max_attempts - 1:
                 raise
-            delay = _backoff_delay(attempt, retry_after_seconds(exc))
+            retry_after = retry_after_seconds(exc)
+            if retry_after is not None and retry_after > MAX_RETRY_AFTER_SECONDS:
+                logger.warning(
+                    "llm_call_quota_exhausted",
+                    extra={"provider": provider, "task": task, "retry_after_seconds": retry_after},
+                )
+                raise
+            delay = _backoff_delay(attempt, retry_after)
             logger.warning(
                 "llm_call_retrying",
                 extra={

@@ -129,3 +129,54 @@ def test_retry_after_returns_none_when_header_is_absent_or_unparseable():
     exc = _Boom("bad header")
     exc.response = _Response()
     assert retry_after_seconds(exc) is None
+
+
+def _rate_limited(seconds: str) -> _Boom:
+    class _Response:
+        headers = {"retry-after": seconds}
+
+    exc = _Boom("429")
+    exc.response = _Response()
+    return exc
+
+
+async def _run_once_rate_limited(seconds: str) -> tuple[list[float], list[int]]:
+    slept: list[float] = []
+    attempts: list[int] = []
+    exc = _rate_limited(seconds)
+
+    async def operation():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise exc
+        return "ok"
+
+    async def record_sleep(s: float) -> None:
+        slept.append(s)
+
+    await with_retries(operation, is_retryable=_retryable, provider="test", task="t",
+                       sleep=record_sleep)
+    return slept, attempts
+
+
+async def test_a_per_minute_window_is_waited_out_in_full():
+    """Groq's TPM windows ask for tens of seconds; the old 20 s cap retried
+    before the window reopened."""
+    slept, attempts = await _run_once_rate_limited("45")
+    assert (slept, len(attempts)) == ([45.0], 2)
+
+
+async def test_a_spent_daily_quota_fails_now_instead_of_sleeping():
+    slept: list[float] = []
+    exc = _rate_limited("3600")
+
+    async def operation():
+        raise exc
+
+    async def record_sleep(s: float) -> None:
+        slept.append(s)
+
+    with pytest.raises(_Boom):
+        await with_retries(operation, is_retryable=_retryable, provider="test", task="t",
+                           sleep=record_sleep)
+    assert slept == []

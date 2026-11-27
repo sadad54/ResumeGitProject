@@ -1,16 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch, ApiError, getAccessToken } from "@/lib/api";
-
-type ProfileFact = {
-  id: string;
-  type: string;
-  value_json: Record<string, string>;
-  source: string;
-  immutable: boolean;
-  confirmed: boolean;
-};
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
+import { api, unwrap } from "@/lib/api-client";
+import { qk, useProfileFacts, type ProfileFact } from "@/lib/queries";
+import { useSession } from "@/lib/session";
+import { DEMO_READ_ONLY } from "./session-ui";
 
 /**
  * Resume upload -> ProfileFact extraction and confirmation (PRD §13, Phase 5).
@@ -18,74 +13,66 @@ type ProfileFact = {
  * the user reviews and confirms it — no ProfileFact is trusted sight-unseen.
  */
 export function ResumeUpload() {
-  const [signedIn, setSignedIn] = useState(false);
-  const [facts, setFacts] = useState<ProfileFact[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { canWrite } = useSession();
+  const queryClient = useQueryClient();
+  const facts = useProfileFacts();
 
-  async function loadFacts() {
-    try {
-      const result = await apiFetch<ProfileFact[]>("/api/v1/profile/facts");
-      setFacts(result);
-    } catch {
-      // silent — page still usable without facts loaded
-    }
-  }
-
-  useEffect(() => {
-    // getAccessToken() reads localStorage, which doesn't exist during SSR —
-    // calling it directly in the render body would make the server render
-    // "signed out" while the client immediately re-renders "signed in",
-    // causing a hydration mismatch. Deferring to an effect (client-only,
-    // post-mount) keeps the first client render identical to the SSR output.
-    setSignedIn(!!getAccessToken());
-    if (!getAccessToken()) return;
-    void loadFacts();
-  }, []);
-
-
-
-  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    setError(null);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      await apiFetch("/api/v1/profile/resume", { method: "POST", body: formData });
-      await loadFacts();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to process resume");
-    } finally {
-      setUploading(false);
-      e.target.value = "";
-    }
-  }
-
-  async function confirmFact(id: string) {
-    const updated = await apiFetch<ProfileFact>(`/api/v1/profile/facts/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ confirmed: true }),
-    });
-    setFacts((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
-  }
-
-  if (!signedIn) return null;
+  const upload = useMutation({
+    // Multipart, so the untyped helper (it still goes through authFetch).
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return apiFetch<ProfileFact[]>("/api/v1/profile/resume", { method: "POST", body: form });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.facts }),
+  });
+  const confirm = useMutation({
+    mutationFn: async (id: string) =>
+      unwrap(
+        await api.PATCH("/api/v1/profile/facts/{fact_id}", {
+          params: { path: { fact_id: id } },
+          body: { confirmed: true },
+        }),
+      ),
+    onSuccess: (updated) =>
+      queryClient.setQueryData<ProfileFact[]>(qk.facts, (list) =>
+        list?.map((f) => (f.id === updated.id ? updated : f)),
+      ),
+  });
 
   return (
     <div className="space-y-3">
-      <div>
-        <input type="file" accept=".pdf,.docx" onChange={upload} disabled={uploading} className="text-sm" />
-        {uploading && <span className="ml-2 text-xs text-neutral-500">Processing...</span>}
-      </div>
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      {facts.length > 0 && (
+      <label className="ph-field">
+        Resume (PDF or DOCX)
+        <input
+          type="file"
+          accept=".pdf,.docx"
+          disabled={!canWrite || upload.isPending}
+          title={!canWrite ? DEMO_READ_ONLY : undefined}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) upload.mutate(file);
+            e.target.value = "";
+          }}
+        />
+      </label>
+      {upload.isPending && (
+        <p role="status" className="text-xs text-neutral-500">
+          Extracting facts…
+        </p>
+      )}
+      {(upload.isError || confirm.isError) && (
+        <p className="ph-error" role="alert">
+          {(upload.error ?? confirm.error)?.message}
+        </p>
+      )}
+      {facts.data && facts.data.length > 0 && (
         <ul className="space-y-1">
-          {facts.map((fact) => (
-            <li key={fact.id} className="flex items-center justify-between rounded border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800">
+          {facts.data.map((fact) => (
+            <li
+              key={fact.id}
+              className="flex items-center justify-between gap-3 rounded border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800"
+            >
               <span>
                 <span className="mr-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs dark:bg-neutral-800">
                   {fact.type}
@@ -93,11 +80,13 @@ export function ResumeUpload() {
                 {Object.values(fact.value_json).filter(Boolean).join(" — ")}
               </span>
               {fact.confirmed ? (
-                <span className="text-xs text-green-600">confirmed</span>
+                <span className="text-xs ph-ok">✓ confirmed</span>
               ) : (
                 <button
-                  onClick={() => confirmFact(fact.id)}
-                  className="rounded border border-neutral-300 px-2 py-0.5 text-xs dark:border-neutral-700"
+                  type="button"
+                  className="ph-button"
+                  disabled={!canWrite || confirm.isPending}
+                  onClick={() => confirm.mutate(fact.id)}
                 >
                   Confirm
                 </button>
@@ -109,4 +98,3 @@ export function ResumeUpload() {
     </div>
   );
 }
-

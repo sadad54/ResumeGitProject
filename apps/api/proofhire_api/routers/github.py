@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,6 +33,8 @@ from proofhire_api.services.github_oauth import (
     verify_oauth_state,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1/github", tags=["github"])
 
 
@@ -64,19 +67,36 @@ async def disconnect(
     await db.commit()
 
 
+def _back_to_settings(outcome: str) -> RedirectResponse:
+    return RedirectResponse(url=f"{get_settings().web_base_url}/settings?github={outcome}")
+
+
 @router.get("/callback")
-async def callback(code: str, state: str, db: AsyncSession = Depends(get_db)) -> RedirectResponse:
-    settings = get_settings()
+async def callback(
+    state: str = "",
+    code: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> RedirectResponse:
+    """GitHub sends the browser here after the consent screen, so every
+    outcome must send it back to the web app. This used to require `code`
+    and raise on failure, so clicking Cancel on GitHub (which returns
+    `error=access_denied` and no code) left the user on the API's domain
+    looking at a JSON 422. Reasons are short fixed codes, never GitHub's
+    free-text error, since they end up in a URL the web app renders."""
+    if error or not code:
+        return _back_to_settings("denied" if error == "access_denied" else "error")
     try:
         user_id = verify_oauth_state(state)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except ValueError:
+        return _back_to_settings("expired")
 
     try:
         access_token = await exchange_code_for_token(code)
         github_user = await fetch_github_user(access_token)
-    except GitHubOAuthError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except GitHubOAuthError:
+        logger.warning("github_oauth_exchange_failed", extra={"user_id": str(user_id)})
+        return _back_to_settings("error")
 
     connection = await db.scalar(
         select(GitHubConnection).where(GitHubConnection.user_id == user_id)
@@ -98,7 +118,7 @@ async def callback(code: str, state: str, db: AsyncSession = Depends(get_db)) ->
 
     await db.commit()
 
-    return RedirectResponse(url=f"{settings.web_base_url}/settings?github=connected")
+    return _back_to_settings("connected")
 
 
 @router.get("/repositories", response_model=list[RepositoryPublic])
@@ -204,9 +224,14 @@ async def trigger_sync(
     await db.commit()
     await db.refresh(sync_run)
 
+    from proofhire_api.routers.events import stream_position
+
+    events_after = await stream_position(sync_run.id)
     sync_repositories.send(str(sync_run.id), repo_ids)
 
-    return SyncTriggerResponse(run_id=sync_run.id, status=sync_run.status)
+    return SyncTriggerResponse(
+        run_id=sync_run.id, status=sync_run.status, events_after=events_after
+    )
 
 
 @router.get("/sync/{run_id}", response_model=SyncStatusResponse)

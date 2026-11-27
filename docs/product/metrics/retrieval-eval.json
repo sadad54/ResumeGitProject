@@ -1,0 +1,615 @@
+{
+  "generated_at": "2026-09-28T01:56:09.184321+00:00",
+  "task": "rank ESCO skills for a job-ad sentence; relevant = human-assigned labels",
+  "taxonomy": {
+    "url": "https://raw.githubusercontent.com/jensjorisdecorte/Skill-Extraction-benchmark/19305c85e35a74fb2a5128d8ee3798b06470b596/data/skills_en_label.txt",
+    "sha256": "1a809c7d4b7d028cf5e46717ac7e3575361335ed24c51fd8ee5832528513e348",
+    "skills": 13896
+  },
+  "datasets": {
+    "tech": {
+      "url": "https://huggingface.co/datasets/TechWolf/skill-extraction-tech/resolve/5f0cb05df03cd1cd5048ff1d64639bf9bd4cb36f/test.csv",
+      "sha256": "9c9fe96da61d730a29d410ff3a534d5a6bb4bfafe1ecb17c9ad49d1ba31b401d",
+      "sentences_with_labels": 338,
+      "queries": 338,
+      "labels_not_in_taxonomy": 2
+    },
+    "house": {
+      "url": "https://huggingface.co/datasets/TechWolf/skill-extraction-house/resolve/dcb313cad615a8f5148ef5addc01ef090fc9f295/test.csv",
+      "sha256": "2daa75ce244fe9401c8c3e5f3a7d196547a17a2dcb0f5829b82e4cf67c44bdfb",
+      "sentences_with_labels": 262,
+      "queries": 262,
+      "labels_not_in_taxonomy": 0
+    },
+    "techwolf": {
+      "url": "https://huggingface.co/datasets/TechWolf/skill-extraction-techwolf/resolve/ed83e50ff6bc7e44008e98a82f6143ddaf59a255/test.csv",
+      "sha256": "f98805f9c18bae6be7f4f8af16737eb2b1e3a48b65132aebf951d44b221e3f49",
+      "sentences_with_labels": 326,
+      "queries": 326,
+      "labels_not_in_taxonomy": 0
+    }
+  },
+  "queries": 926,
+  "embedding_model": "BAAI/bge-small-en-v1.5",
+  "fusion_weights": {
+    "lexical": 0.35,
+    "vector": 0.45
+  },
+  "candidates_per_signal": 50,
+  "environment": {
+    "python": "3.14.4",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43"
+  },
+  "seconds": 86.8,
+  "results": {
+    "dense": {
+      "pooled": {
+        "recall@5": {
+          "mean": 0.3669,
+          "ci95": [
+            0.3402,
+            0.3947
+          ]
+        },
+        "recall@10": {
+          "mean": 0.4531,
+          "ci95": [
+            0.4255,
+            0.4807
+          ]
+        },
+        "mrr": {
+          "mean": 0.3572,
+          "ci95": [
+            0.3318,
+            0.3825
+          ]
+        },
+        "ndcg@5": {
+          "mean": 0.3051,
+          "ci95": [
+            0.2803,
+            0.3292
+          ]
+        }
+      },
+      "tech": {
+        "recall@5": 0.4304,
+        "recall@10": 0.5217,
+        "mrr": 0.4243,
+        "ndcg@5": 0.3666
+      },
+      "house": {
+        "recall@5": 0.3039,
+        "recall@10": 0.4013,
+        "mrr": 0.3015,
+        "ndcg@5": 0.2432
+      },
+      "techwolf": {
+        "recall@5": 0.3518,
+        "recall@10": 0.4236,
+        "mrr": 0.3325,
+        "ndcg@5": 0.2912
+      },
+      "queries_with_no_results": 0
+    },
+    "dense_instr": {
+      "pooled": {
+        "recall@5": {
+          "mean": 0.3764,
+          "ci95": [
+            0.35,
+            0.4044
+          ]
+        },
+        "recall@10": {
+          "mean": 0.4556,
+          "ci95": [
+            0.4273,
+            0.4831
+          ]
+        },
+        "mrr": {
+          "mean": 0.3715,
+          "ci95": [
+            0.3444,
+            0.3962
+          ]
+        },
+        "ndcg@5": {
+          "mean": 0.3167,
+          "ci95": [
+            0.2906,
+            0.3407
+          ]
+        }
+      },
+      "tech": {
+        "recall@5": 0.4505,
+        "recall@10": 0.5373,
+        "mrr": 0.4473,
+        "ndcg@5": 0.387
+      },
+      "house": {
+        "recall@5": 0.3191,
+        "recall@10": 0.3994,
+        "mrr": 0.3208,
+        "ndcg@5": 0.2591
+      },
+      "techwolf": {
+        "recall@5": 0.3456,
+        "recall@10": 0.4161,
+        "mrr": 0.3337,
+        "ndcg@5": 0.29
+      },
+      "queries_with_no_results": 0
+    },
+    "hash_fallback": {
+      "pooled": {
+        "recall@5": {
+          "mean": 0.0011,
+          "ci95": [
+            0.0,
+            0.0032
+          ]
+        },
+        "recall@10": {
+          "mean": 0.0011,
+          "ci95": [
+            0.0,
+            0.0032
+          ]
+        },
+        "mrr": {
+          "mean": 0.0013,
+          "ci95": [
+            0.0001,
+            0.0035
+          ]
+        },
+        "ndcg@5": {
+          "mean": 0.0011,
+          "ci95": [
+            0.0,
+            0.0032
+          ]
+        }
+      },
+      "tech": {
+        "recall@5": 0.003,
+        "recall@10": 0.003,
+        "mrr": 0.0032,
+        "ndcg@5": 0.003
+      },
+      "house": {
+        "recall@5": 0.0,
+        "recall@10": 0.0,
+        "mrr": 0.0001,
+        "ndcg@5": 0.0
+      },
+      "techwolf": {
+        "recall@5": 0.0,
+        "recall@10": 0.0,
+        "mrr": 0.0002,
+        "ndcg@5": 0.0
+      },
+      "queries_with_no_results": 0
+    },
+    "lexical_and": {
+      "pooled": {
+        "recall@5": {
+          "mean": 0.0151,
+          "ci95": [
+            0.0086,
+            0.0227
+          ]
+        },
+        "recall@10": {
+          "mean": 0.0151,
+          "ci95": [
+            0.0076,
+            0.0248
+          ]
+        },
+        "mrr": {
+          "mean": 0.0122,
+          "ci95": [
+            0.0061,
+            0.02
+          ]
+        },
+        "ndcg@5": {
+          "mean": 0.0129,
+          "ci95": [
+            0.0068,
+            0.02
+          ]
+        }
+      },
+      "tech": {
+        "recall@5": 0.0148,
+        "recall@10": 0.0148,
+        "mrr": 0.0121,
+        "ndcg@5": 0.0126
+      },
+      "house": {
+        "recall@5": 0.0076,
+        "recall@10": 0.0076,
+        "mrr": 0.0076,
+        "ndcg@5": 0.0076
+      },
+      "techwolf": {
+        "recall@5": 0.0215,
+        "recall@10": 0.0215,
+        "mrr": 0.016,
+        "ndcg@5": 0.0173
+      },
+      "queries_with_no_results": 908
+    },
+    "lexical_or": {
+      "pooled": {
+        "recall@5": {
+          "mean": 0.1615,
+          "ci95": [
+            0.1416,
+            0.1843
+          ]
+        },
+        "recall@10": {
+          "mean": 0.2247,
+          "ci95": [
+            0.1995,
+            0.2499
+          ]
+        },
+        "mrr": {
+          "mean": 0.1674,
+          "ci95": [
+            0.1487,
+            0.1873
+          ]
+        },
+        "ndcg@5": {
+          "mean": 0.1303,
+          "ci95": [
+            0.1134,
+            0.1477
+          ]
+        }
+      },
+      "tech": {
+        "recall@5": 0.2059,
+        "recall@10": 0.2751,
+        "mrr": 0.2123,
+        "ndcg@5": 0.173
+      },
+      "house": {
+        "recall@5": 0.1206,
+        "recall@10": 0.1878,
+        "mrr": 0.1442,
+        "ndcg@5": 0.1011
+      },
+      "techwolf": {
+        "recall@5": 0.1484,
+        "recall@10": 0.202,
+        "mrr": 0.1394,
+        "ndcg@5": 0.1096
+      },
+      "queries_with_no_results": 3
+    },
+    "hybrid_prod": {
+      "pooled": {
+        "recall@5": {
+          "mean": 0.3658,
+          "ci95": [
+            0.3388,
+            0.3925
+          ]
+        },
+        "recall@10": {
+          "mean": 0.452,
+          "ci95": [
+            0.4234,
+            0.4808
+          ]
+        },
+        "mrr": {
+          "mean": 0.3567,
+          "ci95": [
+            0.332,
+            0.3835
+          ]
+        },
+        "ndcg@5": {
+          "mean": 0.3052,
+          "ci95": [
+            0.2812,
+            0.3286
+          ]
+        }
+      },
+      "tech": {
+        "recall@5": 0.4304,
+        "recall@10": 0.5217,
+        "mrr": 0.4232,
+        "ndcg@5": 0.3666
+      },
+      "house": {
+        "recall@5": 0.3039,
+        "recall@10": 0.4013,
+        "mrr": 0.3016,
+        "ndcg@5": 0.2441
+      },
+      "techwolf": {
+        "recall@5": 0.3487,
+        "recall@10": 0.4205,
+        "mrr": 0.3322,
+        "ndcg@5": 0.2908
+      },
+      "queries_with_no_results": 0
+    },
+    "hybrid_or": {
+      "pooled": {
+        "recall@5": {
+          "mean": 0.3912,
+          "ci95": [
+            0.3626,
+            0.4189
+          ]
+        },
+        "recall@10": {
+          "mean": 0.4739,
+          "ci95": [
+            0.4461,
+            0.5009
+          ]
+        },
+        "mrr": {
+          "mean": 0.3792,
+          "ci95": [
+            0.3561,
+            0.4044
+          ]
+        },
+        "ndcg@5": {
+          "mean": 0.3223,
+          "ci95": [
+            0.2989,
+            0.3451
+          ]
+        }
+      },
+      "tech": {
+        "recall@5": 0.4536,
+        "recall@10": 0.5463,
+        "mrr": 0.4387,
+        "ndcg@5": 0.378
+      },
+      "house": {
+        "recall@5": 0.3245,
+        "recall@10": 0.4009,
+        "mrr": 0.3386,
+        "ndcg@5": 0.2687
+      },
+      "techwolf": {
+        "recall@5": 0.38,
+        "recall@10": 0.4574,
+        "mrr": 0.3501,
+        "ndcg@5": 0.3076
+      },
+      "queries_with_no_results": 0
+    },
+    "hybrid_or_instr": {
+      "pooled": {
+        "recall@5": {
+          "mean": 0.3973,
+          "ci95": [
+            0.371,
+            0.4251
+          ]
+        },
+        "recall@10": {
+          "mean": 0.4794,
+          "ci95": [
+            0.4498,
+            0.509
+          ]
+        },
+        "mrr": {
+          "mean": 0.3801,
+          "ci95": [
+            0.3562,
+            0.4066
+          ]
+        },
+        "ndcg@5": {
+          "mean": 0.3247,
+          "ci95": [
+            0.3013,
+            0.3499
+          ]
+        }
+      },
+      "tech": {
+        "recall@5": 0.462,
+        "recall@10": 0.5772,
+        "mrr": 0.4384,
+        "ndcg@5": 0.382
+      },
+      "house": {
+        "recall@5": 0.3214,
+        "recall@10": 0.4009,
+        "mrr": 0.3378,
+        "ndcg@5": 0.266
+      },
+      "techwolf": {
+        "recall@5": 0.3912,
+        "recall@10": 0.4411,
+        "mrr": 0.3536,
+        "ndcg@5": 0.3125
+      },
+      "queries_with_no_results": 0
+    },
+    "hybrid_or_rrf": {
+      "pooled": {
+        "recall@5": {
+          "mean": 0.3301,
+          "ci95": [
+            0.3013,
+            0.3556
+          ]
+        },
+        "recall@10": {
+          "mean": 0.4164,
+          "ci95": [
+            0.387,
+            0.443
+          ]
+        },
+        "mrr": {
+          "mean": 0.3178,
+          "ci95": [
+            0.2927,
+            0.3419
+          ]
+        },
+        "ndcg@5": {
+          "mean": 0.2657,
+          "ci95": [
+            0.243,
+            0.2884
+          ]
+        }
+      },
+      "tech": {
+        "recall@5": 0.3793,
+        "recall@10": 0.4821,
+        "mrr": 0.3662,
+        "ndcg@5": 0.3107
+      },
+      "house": {
+        "recall@5": 0.2928,
+        "recall@10": 0.3551,
+        "mrr": 0.3006,
+        "ndcg@5": 0.2386
+      },
+      "techwolf": {
+        "recall@5": 0.309,
+        "recall@10": 0.3974,
+        "mrr": 0.2816,
+        "ndcg@5": 0.2409
+      },
+      "queries_with_no_results": 0
+    }
+  },
+  "paired_comparisons": {
+    "hybrid_or - hybrid_prod": {
+      "mrr": {
+        "mean": 0.0224,
+        "ci95": [
+          0.0068,
+          0.0368
+        ],
+        "excludes_zero": true
+      },
+      "recall@5": {
+        "mean": 0.0253,
+        "ci95": [
+          0.0073,
+          0.0434
+        ],
+        "excludes_zero": true
+      }
+    },
+    "hybrid_or_instr - hybrid_prod": {
+      "mrr": {
+        "mean": 0.0234,
+        "ci95": [
+          0.0053,
+          0.0414
+        ],
+        "excludes_zero": true
+      },
+      "recall@5": {
+        "mean": 0.0315,
+        "ci95": [
+          0.0102,
+          0.052
+        ],
+        "excludes_zero": true
+      }
+    },
+    "hybrid_or_instr - hybrid_or": {
+      "mrr": {
+        "mean": 0.0009,
+        "ci95": [
+          -0.009,
+          0.0111
+        ],
+        "excludes_zero": false
+      },
+      "recall@5": {
+        "mean": 0.0061,
+        "ci95": [
+          -0.0083,
+          0.0199
+        ],
+        "excludes_zero": false
+      }
+    },
+    "dense_instr - dense": {
+      "mrr": {
+        "mean": 0.0143,
+        "ci95": [
+          0.0013,
+          0.0279
+        ],
+        "excludes_zero": true
+      },
+      "recall@5": {
+        "mean": 0.0095,
+        "ci95": [
+          -0.0065,
+          0.026
+        ],
+        "excludes_zero": false
+      }
+    },
+    "hybrid_or_rrf - hybrid_or": {
+      "mrr": {
+        "mean": -0.0613,
+        "ci95": [
+          -0.0778,
+          -0.0461
+        ],
+        "excludes_zero": true
+      },
+      "recall@5": {
+        "mean": -0.0611,
+        "ci95": [
+          -0.081,
+          -0.0412
+        ],
+        "excludes_zero": true
+      }
+    },
+    "dense - hash_fallback": {
+      "mrr": {
+        "mean": 0.356,
+        "ci95": [
+          0.3307,
+          0.3805
+        ],
+        "excludes_zero": true
+      },
+      "recall@5": {
+        "mean": 0.3658,
+        "ci95": [
+          0.3394,
+          0.396
+        ],
+        "excludes_zero": true
+      }
+    }
+  }
+}

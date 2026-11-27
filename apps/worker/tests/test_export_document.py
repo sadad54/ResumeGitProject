@@ -8,9 +8,6 @@ export rather than silently produce an untrustworthy PDF.
 import uuid
 
 import pytest
-from proofhire_contracts import ClaimVerificationStatus, DocumentType, GenerationRunStatus
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from proofhire_api.db import async_session_factory
 from proofhire_api.models.generated_claim import GeneratedClaim
 from proofhire_api.models.generated_document import GeneratedDocument
@@ -18,8 +15,11 @@ from proofhire_api.models.generation_run import GenerationRun
 from proofhire_api.models.job import Job
 from proofhire_api.models.user import User
 from proofhire_api.security.password import hash_password
+from proofhire_api.services.object_storage import get_object_storage
+from proofhire_contracts import ClaimVerificationStatus, DocumentType, GenerationRunStatus
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proofhire_worker.render.export import ParseBackValidationError, export_document
-from proofhire_worker.render.storage import read_bytes
 
 
 @pytest.fixture
@@ -48,6 +48,7 @@ async def fixture_env(db_session: AsyncSession):
 
     yield user, job, run
 
+    await get_object_storage().delete_prefix(f"users/{user.id}/")
     async with async_session_factory() as cleanup_session:
         await cleanup_session.delete(await cleanup_session.get(User, user.id))
         await cleanup_session.commit()
@@ -82,14 +83,23 @@ async def test_export_renders_validates_and_stores_pdf(db_session, fixture_env):
 
     result = await export_document(db_session, document, user.email)
 
-    assert result.pdf_ref is not None
-    assert result.html_ref is not None
-    assert result.plaintext_ref is not None
+    # Storage keys, owner-scoped and deterministic — never filesystem paths.
+    assert result.pdf_ref == f"users/{user.id}/documents/{document.id}.pdf"
+    assert result.html_ref == f"users/{user.id}/documents/{document.id}.html"
+    assert result.plaintext_ref == f"users/{user.id}/documents/{document.id}.txt"
+    assert result.exported_at is not None
 
-    pdf_bytes = read_bytes(result.pdf_ref)
+    storage = get_object_storage()
+    pdf_bytes = await storage.get(result.pdf_ref)
     assert pdf_bytes[:4] == b"%PDF"
 
-    plaintext = read_bytes(result.plaintext_ref).decode("utf-8")
+    # A re-export with another template overwrites the same objects instead
+    # of orphaning the previous files.
+    again = await export_document(db_session, document, user.email, "technical_dense")
+    assert again.pdf_ref == result.pdf_ref
+    assert (await storage.get(again.pdf_ref))[:4] == b"%PDF"
+
+    plaintext = (await storage.get(result.plaintext_ref)).decode("utf-8")
     assert "30%" in plaintext
     # The template CSS uppercases section headers (text-transform), so the
     # raw extracted text reads "SUMMARY" — case-insensitive check here,

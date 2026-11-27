@@ -2,13 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch, getAccessToken } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@proofhire/design-system/ui";
+import { api, unwrap } from "@/lib/api-client";
+import { qk } from "@/lib/queries";
+import { useSession } from "@/lib/session";
 
 export function CommandPalette() {
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const { status, canWrite } = useSession();
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -36,30 +41,32 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", key);
   }, []);
   async function sync() {
-    if (!getAccessToken()) {
-      setMessage("Log in on Home before syncing.");
+    if (status !== "authenticated") {
+      setMessage("Sign in before syncing.");
+      return;
+    }
+    if (!canWrite) {
+      setMessage("The demo is read-only — sign up to sync your own repositories.");
       return;
     }
     setBusy(true);
     try {
-      const repos = await apiFetch<{ id: string; selected: boolean }[]>(
-        "/api/v1/github/repositories",
-      );
+      const repos = unwrap(await api.GET("/api/v1/github/repositories"));
       const ids = repos.filter((r) => r.selected).map((r) => r.id);
       if (!ids.length) {
-        setMessage("Select repositories on Home first.");
+        setMessage("Select repositories in Settings first.");
         return;
       }
-      const run = await apiFetch<{ run_id: string }>("/api/v1/github/sync", {
-        method: "POST",
-        body: JSON.stringify({ repository_ids: ids }),
-      });
+      const run = unwrap(
+        await api.POST("/api/v1/github/sync", { body: { repository_ids: ids } }),
+      );
+      void queryClient.invalidateQueries({ queryKey: qk.repositories });
       setMessage(
-        `GitHub sync queued. Run ${run.run_id.slice(0, 8)}. Revisit Evidence when complete.`,
+        `GitHub sync queued (run ${run.run_id.slice(0, 8)}). Progress shows in Settings; evidence appears as it's extracted.`,
       );
       close();
-    } catch {
-      setMessage("Sync failed. Check your connection and try again.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Sync failed. Check your connection and try again.");
     } finally {
       setBusy(false);
     }

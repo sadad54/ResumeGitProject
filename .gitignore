@@ -70,3 +70,10 @@ htmlcov/
 **/playwright-report/
 reports/
 .vercel
+
+# Local dev stack (scripts/dev-backend.sh): pids and logs
+.dev/
+
+# Generated launch video (kept locally, not versioned)
+brag-output/
+.venv313/

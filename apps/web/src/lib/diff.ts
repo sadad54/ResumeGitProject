@@ -98,5 +98,13 @@ export function documentToLines(content: unknown): string[] {
       }
     }
   }
+  if (Array.isArray(c.projects)) {
+    for (const project of c.projects as Record<string, unknown>[]) {
+      lines.push(`## Project: ${project.name ?? ""}`);
+      if (Array.isArray(project.bullets)) {
+        for (const b of project.bullets as unknown[]) lines.push(`• ${String(b)}`);
+      }
+    }
+  }
   return lines;
 }

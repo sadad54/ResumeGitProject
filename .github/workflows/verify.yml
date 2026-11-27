@@ -68,18 +68,19 @@ jobs:
       - run: npm exec --workspace apps/web -- playwright install --with-deps chromium
       - run: npm exec --workspace apps/web -- playwright test --grep-invert "matches baseline"
       # Visual regression. Baselines are per-platform; Linux ones must be
-      # generated on Linux. If none are committed yet, generate them and
-      # publish as an artifact to commit — and say so — instead of silently
-      # passing an empty comparison.
+      # generated on Linux. Every committed baseline is compared; a page
+      # with no committed Linux baseline (new, or deliberately changed and
+      # its old baseline removed) gets one generated and published as an
+      # artifact to commit — with a warning, never a silent pass.
       - name: Visual regression
         id: visual
         working-directory: apps/web
         run: |
-          if ls tests/visual.spec.ts-snapshots/*-linux.png >/dev/null 2>&1; then
-            npx playwright test tests/visual.spec.ts --project=desktop
-          else
-            echo "::warning::No Linux visual baselines committed; generating them. Download the visual-baselines artifact and commit apps/web/tests/visual.spec.ts-snapshots/*-linux.png to arm the comparison."
-            npx playwright test tests/visual.spec.ts --project=desktop --update-snapshots
+          npx playwright test tests/visual.spec.ts --project=desktop --update-snapshots=missing
+          new=$(git status --porcelain -- tests/visual.spec.ts-snapshots)
+          if [ -n "$new" ]; then
+            echo "::warning::Generated Linux visual baselines that weren't committed (not compared this run). Download the visual-baselines artifact and commit them:"
+            echo "$new"
           fi
       - uses: actions/upload-artifact@v4
         if: always()
@@ -100,3 +101,46 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -f infra/docker/Dockerfile.api -t proofhire-api .
       - run: docker build -f infra/docker/Dockerfile.web -t proofhire-web .
+  # The image that actually ships: built from the same Dockerfile the Space
+  # builds, booted with production settings against a real Postgres, and
+  # smoke-tested through its public API (infra/docker/smoke_space.py). Runs
+  # on every PR: this is where a broken entrypoint, a missing system library
+  # for Chromium or an un-baked model would otherwise first show up — in prod.
+  space-image:
+    # The production VM (Oracle Always Free, Ampere A1) is arm64, so the image
+    # is built and smoke-tested natively on both architectures.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: proofhire
+          POSTGRES_PASSWORD: proofhire
+          POSTGRES_DB: proofhire
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U proofhire" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Space image
+        run: docker build -f infra/docker/Dockerfile.space -t proofhire-space .
+      - name: Boot it as the Space does (production settings, mock LLM)
+        run: |
+          docker run -d --name space --network host             -e ENVIRONMENT=production -e PORT=7860             -e DATABASE_URL=postgresql+asyncpg://proofhire:proofhire@127.0.0.1:5432/proofhire             -e AUTH_SECRET_KEY="$(openssl rand -hex 32)"             -e TOKEN_ENCRYPTION_KEY="$(openssl rand -base64 32 | tr '+/' '-_')"             -e API_BASE_URL=https://smoke.proofhire.example             -e WEB_BASE_URL=https://smoke.proofhire.example             -e LLM_DEFAULT_PROVIDER=mock             proofhire-space
+          for i in $(seq 1 90); do
+            curl -fsS http://127.0.0.1:7860/ready && exit 0
+            sleep 2
+          done
+          docker logs space
+          exit 1
+      - run: pip install httpx
+      - name: Smoke test through the public API and inside the container
+        run: python infra/docker/smoke_space.py --api http://127.0.0.1:7860 --container space
+      - name: Container logs
+        if: always()
+        run: docker logs space 2>&1 | tail -150

@@ -133,16 +133,3 @@ class AnthropicProvider:
                 estimated_cost_usd=cost,
             ),
         )
-
-    async def embed(self, texts: list[str], *, model: str) -> list[list[float]]:
-        # Anthropic has no first-party embeddings endpoint. Rather than bolt on a
-        # third embeddings vendor (extra API key, extra dependency) for what would
-        # be a rarely-exercised path, embeddings always go through OpenAIProvider
-        # regardless of LLM_DEFAULT_PROVIDER — see get_embedding_provider() in
-        # provider_factory.py. This method exists only to satisfy the LLMProvider
-        # Protocol; calling it directly is a caller error.
-        raise NotImplementedError(
-            "AnthropicProvider has no embeddings endpoint — use "
-            "provider_factory.get_embedding_provider() instead of calling "
-            "AnthropicProvider.embed() directly."
-        )

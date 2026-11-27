@@ -26,15 +26,15 @@ from proofhire_api.repositories.evidence import (
 from proofhire_api.security.token_crypto import decrypt_token
 from proofhire_api.services.github_client import GitHubClient
 from proofhire_api.telemetry import traced_stage
-from proofhire_contracts import EvidenceType, RunEventName
-from proofhire_contracts.embedding import EMBEDDING_MODEL
+from proofhire_contracts import EvidenceType, RunEventName, SyncStatus
 from proofhire_prompts.evidence_extract_v1 import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from proofhire_worker.db import async_session_factory
 from proofhire_worker.events import publish_event
 from proofhire_worker.intelligence.confidence import combine_confidence
-from proofhire_worker.intelligence.llm_provider import Message, ModelConfig
+from proofhire_worker.intelligence.embeddings import evidence_embedding_text
+from proofhire_worker.intelligence.llm_provider import Message
 from proofhire_worker.intelligence.model_selection import config_for
 from proofhire_worker.intelligence.provider_factory import get_embedding_provider, get_provider
 from proofhire_worker.intelligence.schemas import EvidenceExtractionOutput
@@ -66,25 +66,49 @@ def _group_files(files: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
     return groups
 
 
+async def _settle_repository(repository_id: uuid.UUID, status: SyncStatus) -> None:
+    async with async_session_factory() as session:
+        await session.execute(
+            update(Repository).where(Repository.id == repository_id).values(sync_status=status)
+        )
+        await session.commit()
+
+
 @traced_stage("evidence_extraction")
 async def _extract_for_repository(
     repository_id_str: str, run_id_str: str, artifact_ids: list[str] | None = None
 ) -> None:
+    """Extract, then always settle the repository out of `extracting` (set by
+    sync.py when it queued this run), so the UI and anyone polling learn that
+    extraction ended however it ended: COMPLETED, or FAILED when it couldn't
+    run or no LLM call succeeded. Settled from a fresh session, since the
+    working session may be unusable after whatever failed."""
     repository_id = uuid.UUID(repository_id_str)
+    outcome = SyncStatus.FAILED
+    try:
+        outcome = await _extract(repository_id, run_id_str, artifact_ids)
+    finally:
+        await _settle_repository(repository_id, outcome)
+
+
+async def _extract(
+    repository_id: uuid.UUID, run_id_str: str, artifact_ids: list[str] | None
+) -> SyncStatus:
+    repository_id_str = str(repository_id)
     model_config = config_for("evidence_extract")
 
     async with async_session_factory() as session:
         repository = await session.get(Repository, repository_id)
         if repository is None:
             logger.error("repository_not_found", extra={"repository_id": repository_id_str})
-            return
+            return SyncStatus.FAILED
 
         connection = await session.scalar(
             select(GitHubConnection).where(GitHubConnection.user_id == repository.user_id)
         )
         if connection is None:
             logger.error("github_not_connected", extra={"repository_id": repository_id_str})
-            return
+            return SyncStatus.FAILED
 
         client = GitHubClient(decrypt_token(connection.token_ref))
 
@@ -100,7 +124,7 @@ async def _extract_for_repository(
         artifacts_result = await session.scalars(stmt)
         artifacts = list(artifacts_result.all())
         if not artifacts:
-            return
+            return SyncStatus.COMPLETED  # only P2 files changed: nothing to extract
 
         files: list[tuple[str, str]] = []
         artifact_by_path: dict[str, SourceArtifact] = {}
@@ -129,7 +153,9 @@ async def _extract_for_repository(
                 str(v).strip().lower() for v in (repository.language_summary or {}).get(key, [])
             )
 
-        for group in _group_files(files):
+        groups = _group_files(files)
+        failed_groups = 0
+        for group in groups:
             user_message = build_user_message(repo_full_name, group)
             try:
                 result = await provider.structured_generate(
@@ -142,6 +168,7 @@ async def _extract_for_repository(
                     model_config=model_config,
                 )
             except Exception:
+                failed_groups += 1
                 logger.exception(
                     "evidence_extraction_failed",
                     extra={"repository_id": repository_id_str, "group_paths": [p for p, _ in group]},
@@ -167,7 +194,7 @@ async def _extract_for_repository(
                 },
             )
 
-            candidates: list[EvidenceCandidate] = []
+            accepted = []
             for item in result.value.evidence:
                 try:
                     evidence_type = EvidenceType(item.evidence_type)
@@ -191,14 +218,25 @@ async def _extract_for_repository(
                     )
                 if not sources:
                     continue  # PRD §14: no provenance, no evidence
+                accepted.append((item, evidence_type, sources))
 
-                embed_text = f"{item.title}. {item.normalized_claim} {item.description}"
+            # One embedding call per file group rather than one per item.
+            # A failure leaves the vectors empty (lexical and skill retrieval
+            # still work) and the re-embedding backfill fills them later.
+            embeddings: list[list[float] | None] = [None] * len(accepted)
+            if accepted:
                 try:
-                    [embedding] = await embedding_provider.embed([embed_text], model=EMBEDDING_MODEL)
+                    embeddings = await embedding_provider.embed(
+                        [
+                            evidence_embedding_text(i.title, i.normalized_claim, i.description)
+                            for i, _t, _s in accepted
+                        ]
+                    )
                 except Exception:
-                    embedding = None
                     logger.warning("embedding_failed", extra={"repository_id": repository_id_str})
 
+            candidates: list[EvidenceCandidate] = []
+            for (item, evidence_type, sources), embedding in zip(accepted, embeddings, strict=True):
                 confidence = combine_confidence(
                     semantic_confidence=item.confidence,
                     source_count=len(sources),
@@ -219,6 +257,7 @@ async def _extract_for_repository(
                         sources=sources,
                         skill_names=item.skills,
                         embedding=embedding,
+                        embedding_model=embedding_provider.model_id if embedding else None,
                     )
                 )
 
@@ -234,11 +273,23 @@ async def _extract_for_repository(
 
         logger.info(
             "evidence_extraction_completed",
-            extra={"repository_id": repository_id_str, "evidence_created": total_saved},
+            extra={
+                "repository_id": repository_id_str,
+                "evidence_created": total_saved,
+                "groups": len(groups),
+                "failed_groups": failed_groups,
+            },
         )
+        if groups and failed_groups == len(groups):
+            return SyncStatus.FAILED
+        return SyncStatus.COMPLETED
 
 
-@dramatiq.actor(max_retries=1, queue_name="ai", time_limit=600_000)
+# One LLM call per file group, sequentially. On Groq's free tier (8K tokens
+# per minute per model, ~5K tokens per call) that is about one call a minute
+# once two repositories extract at once, so a 20-group repository needs ~20
+# minutes; the previous 10-minute limit killed it partway with no record.
+@dramatiq.actor(max_retries=1, queue_name="ai", time_limit=3_600_000)
 def extract_evidence(repository_id: str, run_id: str, artifact_ids: list[str] | None = None) -> None:
     import asyncio
 

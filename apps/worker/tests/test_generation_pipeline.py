@@ -39,6 +39,7 @@ from proofhire_worker.intelligence.schemas import (
     ClaimVerificationOutput,
     ExperienceEntryOutput,
     PositioningOutput,
+    ProjectEntryOutput,
     ResumeContentOutput,
 )
 
@@ -237,3 +238,69 @@ async def test_planted_unsupported_metric_is_caught_and_stripped(db_session, fix
 
     real_claims = [c for c in claims if REAL_METRIC in c.claim_text]
     assert all(c.verification_status == ClaimVerificationStatus.SUPPORTED for c in real_claims)
+
+
+def _projects_writer(seen: list[str]):
+    def fixture(task, messages, schema):
+        seen.append(messages[-1].content)
+        return schema(
+            summary="Backend engineer with a track record of measurable performance improvements.",
+            skills=["Python", "Caching"],
+            experience=[],
+            projects=[
+                ProjectEntryOutput(name="testowner/testrepo", bullets=[
+                    f"Improved throughput by {REAL_METRIC} via caching.",
+                    f"Improved throughput by {INVENTED_METRIC} via magic.",
+                ]),
+                # Nothing true survives verification here: the project must go.
+                ProjectEntryOutput(name="testowner/other", bullets=[
+                    f"Cut latency by {INVENTED_METRIC}.",
+                ]),
+            ],
+        )
+
+    return fixture
+
+
+@pytest.mark.asyncio
+async def test_github_only_candidate_gets_verified_project_bullets(
+    db_session, fixture_env, monkeypatch
+):
+    """resume_write:v2. With no uploaded resume (no employment facts) the v1
+    writer had nowhere to put evidence: the first live run produced 0
+    bullets from 54 evidence items. Project bullets now carry it, through
+    the same verification and deterministic fact guard as experience."""
+    from sqlalchemy import delete
+
+    from proofhire_worker.render.export import export_document
+
+    user, job, evidence = fixture_env
+    await db_session.execute(delete(ProfileFact).where(ProfileFact.user_id == user.id))
+    await db_session.commit()
+
+    seen: list[str] = []
+    provider = MockLLMProvider(fixtures={
+        "position": _position_fixture,
+        "resume_write": _projects_writer(seen),
+        "claim_verify": _make_claim_verify_fixture(str(evidence.id)),
+    })
+    import proofhire_worker.intelligence.generation as generation_module
+    import proofhire_worker.intelligence.positioning as positioning_module
+
+    monkeypatch.setattr(generation_module, "get_provider", lambda: provider)
+    monkeypatch.setattr(positioning_module, "get_provider", lambda: provider)
+    await generation_module._generate(str(job.id), TailoringMode.CONSERVATIVE.value, "resume")
+
+    assert "[testowner/testrepo]" in seen[0], "the writer must see which repository each item is from"
+    document = await db_session.scalar(
+        select(GeneratedDocument).where(GeneratedDocument.job_id == job.id)
+    )
+    content = document.content_json
+    assert content["experience"] == []
+    assert content["projects"] == [{
+        "name": "testowner/testrepo",
+        "bullets": [f"Improved throughput by {REAL_METRIC} via caching."],
+    }]
+
+    exported = await export_document(db_session, document, "candidate@example.com")
+    assert exported.pdf_ref, "a projects-only resume exports and passes parse-back"

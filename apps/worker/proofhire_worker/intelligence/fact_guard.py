@@ -22,11 +22,26 @@ from enum import StrEnum
 # Claim types that must be grounded in an immutable ProfileFact record.
 IMMUTABLE_CLAIM_TYPES = {"employment", "education", "certification", "award"}
 METRIC_CLAIM_TYPE = "metric"
+# A named technology must appear in the evidence the claim cites (claim_verify:v2).
+# Planted fabrications like "..., deployed on Kubernetes" passed the LLM
+# verifier 20 times out of 20 when judged as part of a mostly-true bullet
+# (apps/worker/scripts/eval_verifier.py); an exact check can't be talked round.
+TECHNOLOGY_CLAIM_TYPE = "technology"
+EVIDENCE_GROUNDED_CLAIM_TYPES = {METRIC_CLAIM_TYPE, TECHNOLOGY_CLAIM_TYPE}
 
-# Claim types this guard doesn't check at all (e.g. general skill/feature
-# claims are the claim *verifier's* job — an LLM judging semantic support
-# against Evidence — not this guard's exact-match job).
-GUARDED_CLAIM_TYPES = IMMUTABLE_CLAIM_TYPES | {METRIC_CLAIM_TYPE}
+# Claim types this guard doesn't check at all (skill/scope/other claims are the
+# claim *verifier's* job — an LLM judging semantic support against Evidence —
+# not this guard's exact-match job).
+GUARDED_CLAIM_TYPES = IMMUTABLE_CLAIM_TYPES | EVIDENCE_GROUNDED_CLAIM_TYPES
+
+# The only non-verbatim matches this module allows: spellings of the same
+# technology that evidence and writer commonly disagree on. Deliberately tiny
+# and explicit; anything not listed must match as written.
+TECHNOLOGY_ALIASES = {
+    "postgres": "postgresql", "k8s": "kubernetes", "js": "javascript",
+    "ts": "typescript", "nodejs": "node.js", "node": "node.js",
+    "golang": "go", "gh actions": "github actions",
+}
 
 
 class FactGuardResult(StrEnum):
@@ -80,10 +95,16 @@ def check_fact(input: FactCheckInput) -> FactGuardResult:
             return FactGuardResult.PASS
         return FactGuardResult.FAIL_MISMATCH
 
-    if input.claim_type == METRIC_CLAIM_TYPE:
+    if input.claim_type in EVIDENCE_GROUNDED_CLAIM_TYPES:
         if not input.evidence_texts:
             return FactGuardResult.FAIL_NO_REFERENCE
-        if appears_verbatim(input.asserted_value, input.evidence_texts):
+        values = [input.asserted_value]
+        if input.claim_type == TECHNOLOGY_CLAIM_TYPE:
+            canonical = TECHNOLOGY_ALIASES.get(_normalize(input.asserted_value).lower())
+            values += [canonical] if canonical else []
+            values += [a for a, c in TECHNOLOGY_ALIASES.items()
+                       if c == _normalize(input.asserted_value).lower()]
+        if any(appears_verbatim(v, input.evidence_texts) for v in values):
             return FactGuardResult.PASS
         return FactGuardResult.FAIL_MISMATCH
 

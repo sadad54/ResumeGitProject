@@ -1,4 +1,5 @@
 import { test } from "@playwright/test";
+import { mockApi } from "./api-mocks";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 /**
@@ -13,8 +14,7 @@ const ROUTES = ["/", "/evidence", "/jobs", "/documents", "/applications", "/sett
 test.skip(({ isMobile }) => !!isMobile, "measured once, on desktop");
 
 test("initial JS payload per route", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("proofhire.access_token", "fixture-token"));
-  await page.route("**/api/v1/**", (route) => route.fulfill({ json: [] }));
+  await mockApi(page);
   const results: Record<string, unknown>[] = [];
   for (const path of ROUTES) {
     const scripts: { url: string; bytes: number }[] = [];
