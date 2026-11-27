@@ -18,6 +18,10 @@ FROM python:3.13-slim AS runtime
 WORKDIR /app
 COPY --from=build /venv /venv
 ENV PATH="/venv/bin:$PATH" PYTHONUNBUFFERED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# Playwright's bundled node needs libatomic1, which the slim base no longer ships.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
 RUN /venv/bin/python -m playwright install --with-deps chromium \
     && /venv/bin/pip uninstall -y pip setuptools \
     && rm -rf /usr/local/lib/python3.13/site-packages/pip* /usr/local/lib/python3.13/site-packages/setuptools* \

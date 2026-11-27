@@ -10,6 +10,13 @@ PROOFHIRE_TEST_REAL_PROVIDERS=1.
 
 import os
 
+from cryptography.fernet import Fernet
+
+# Tests that store a GitHub connection encrypt its token. CI has no .env, so
+# without this they would hit the config's placeholder key, which is not a
+# valid Fernet key.
+os.environ.setdefault("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+
 if os.environ.get("PROOFHIRE_TEST_REAL_PROVIDERS") != "1":
     os.environ["LLM_DEFAULT_PROVIDER"] = "mock"
     os.environ["EMBEDDING_PROVIDER"] = "mock"

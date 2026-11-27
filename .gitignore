@@ -76,3 +76,4 @@ reports/
 
 # Generated launch video (kept locally, not versioned)
 brag-output/
+.venv313/
